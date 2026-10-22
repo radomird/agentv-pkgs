@@ -1,0 +1,113 @@
+name: Build
+
+# Builds AgenTV's packages from agentv-os, signs them, publishes the pacman
+# repository as the release named after its channel, then installs from it
+# the way a box does (ADR-025). stable follows agentv-os's release tags, and
+# edge every commit of its agentv branch that passed the Check workflow.
+# Looks for something new every hour, and runs by hand for a channel and ref.
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "agentv/**"
+      - "agentv-keyring/**"
+      - "bin/**"
+      - "test/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Channel to build"
+        type: choice
+        options: [edge, stable]
+        default: edge
+      ref:
+        description: "agentv-os ref, like tag=v0.1.0 or commit=<sha> (empty: what the channels would build next)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: What needs building
+    runs-on: ubuntu-26.04
+    outputs:
+      builds: ${{ steps.plan.outputs.builds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ inputs.channel }}
+          REF: ${{ inputs.ref }}
+        run: |
+          if [[ -n $REF ]]; then
+            builds=$(bin/plan "$CHANNEL" "$REF")
+          elif [[ $GITHUB_EVENT_NAME == "push" || $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
+            builds=$(bin/plan --all)
+          else
+            builds=$(bin/plan)
+          fi
+          echo "builds=$builds" >>"$GITHUB_OUTPUT"
+          echo "Builds: $builds" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: "${{ matrix.channel }}: build, sign, publish, install"
+    needs: plan
+    if: needs.plan.outputs.builds != '[]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AGENTV_CHANNEL: ${{ matrix.channel }}
+      AGENTV_REF: ${{ matrix.ref }}
+      AGENTV_SOURCE: https://github.com/${{ github.repository_owner }}/agentv-os.git
+      AGENTV_REPO_URL: https://github.com/${{ github.repository }}/releases/download
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # What's published already, so a version that's out there keeps its
+      # exact file.
+      - name: Fetch the published packages
+        run: |
+          mkdir -p repo
+          gh release download "$AGENTV_CHANNEL" -R "$GITHUB_REPOSITORY" -D repo --pattern '*.pkg.tar.*' || true
+          ls -l repo
+
+      - name: Build and sign
+        env:
+          AGENTV_SIGNING_KEY: ${{ secrets.AGENTV_SIGNING_KEY }}
+        run: |
+          docker run --rm -v "$PWD:/src" \
+            -e AGENTV_CHANNEL -e AGENTV_REF -e AGENTV_SOURCE -e AGENTV_REPO_URL -e AGENTV_SIGNING_KEY \
+            ghcr.io/archlinux/archlinux:latest /src/bin/build /src/repo
+
+      - name: Publish
+        run: bin/publish "$AGENTV_CHANNEL" repo
+
+      - name: Install from the release, the way a box does
+        run: |
+          version=$(find repo -maxdepth 1 -name 'agentv-[0-9]*-any.pkg.tar.zst' -printf '%f\n' |
+            sed -E 's/^agentv-(.*)-[0-9]+-any\.pkg\.tar\.zst$/\1/')
+          echo "agentv $version on $AGENTV_CHANNEL" | tee -a "$GITHUB_STEP_SUMMARY"
+          docker run --rm -v "$PWD:/src:ro" -e AGENTV_REPO_URL \
+            ghcr.io/archlinux/archlinux:latest /src/test/install-test.sh "$AGENTV_CHANNEL" "$version" |
+            tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,55 @@
+name: Check
+
+# AgenTV's fast gate (ADR-019, layer 1) on every pull request and every push to
+# main: no em dashes, no secrets, no service automation, no owner in code and
+# shellcheck, with the same bin/agentv-check as the forks.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: "Layer 1: policy, lint and secrets"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install shellcheck and gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          type -P shellcheck >/dev/null || { sudo apt-get update -q && sudo apt-get install -yq shellcheck; }
+          curl -fsSLo /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "$GITLEAKS_SHA256  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          sudo tar -xzf /tmp/gitleaks.tar.gz -C /usr/local/bin gitleaks
+
+      - name: The fast gate
+        run: bin/agentv-check --ci
+
+      - name: The gate catches what it should
+        run: test/agentv/policy/check-test.sh --ci
+
+      # makepkg reads the PKGBUILDs as bash; check that they parse and that
+      # the keyring's checksums match its files.
+      - name: The PKGBUILDs parse
+        run: |
+          for pkgbuild in */PKGBUILD; do
+            AGENTV_SOURCE=https://example.invalid/agentv-os.git AGENTV_REF=commit=0 bash -n "$pkgbuild"
+          done
+          cd agentv-keyring && sha256sum -c <(sed -n "s/^  '\([0-9a-f]\{64\}\)'  # \(.*\)$/\1  \2/p" PKGBUILD)

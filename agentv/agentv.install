@@ -1,0 +1,10 @@
+# Point pacman at AgenTV's repository. On a new box Omarchy rewrites
+# /etc/pacman.conf after the installer is done, so first boot does this again,
+# and so do agentv update and the pre-refresh-pacman hook.
+post_install() {
+  usr/bin/agentv-pacman-conf >/dev/null 2>&1 || true
+}
+
+post_upgrade() {
+  post_install
+}

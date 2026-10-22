@@ -1,0 +1,21 @@
+# The public key AgenTV's packages, release.json and tested.json are signed
+# with, for pacman's keyring, the way omarchy-keyring carries Omarchy's. Bump
+# pkgver when the key changes, and list a retired key in agentv-revoked.
+
+pkgname=agentv-keyring
+pkgver=20261022
+pkgrel=1
+pkgdesc="The key AgenTV's packages are signed with"
+arch=(any)
+license=(MIT)
+install=agentv-keyring.install
+source=(agentv.gpg agentv-trusted agentv-revoked)
+sha256sums=(
+  '2c8f52fbdae90082f83808b4ca2d16748d79e81521b1002d8a68ff4528b4cc92'  # agentv.gpg
+  '24433c9bb618a68b90a0d21ac82e0c45ebc7c6b79d060ea989a0896d19f0752c'  # agentv-trusted
+  'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'  # agentv-revoked
+)
+
+package() {
+  install -Dm644 -t "$pkgdir/usr/share/pacman/keyrings/" agentv.gpg agentv-trusted agentv-revoked
+}

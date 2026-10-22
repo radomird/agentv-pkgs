@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Gets a fresh Arch container ready for pacman the way omarchy-iso's own CI
+# does: pacman 7 sandboxes its downloads with Landlock and fails every sync on
+# a kernel without it, so pacman runs with --disable-sandbox there; Omarchy's
+# Arch mirror goes first; and installing tries three times, since a mirror can
+# drop a file. Sourced by bin/build and test/install-test.sh as root.
+#
+# Usage: arch_container_setup <package>...
+
+arch_container_setup() {
+  local attempt
+
+  if ! grep -qw landlock /sys/kernel/security/lsm 2>/dev/null; then
+    printf '#!/bin/sh\nexec /usr/bin/pacman --disable-sandbox "$@"\n' >/usr/local/bin/pacman
+    chmod 0755 /usr/local/bin/pacman
+    hash -r
+  fi
+  # shellcheck disable=SC2016 # $repo and $arch are pacman's, not the shell's
+  grep -q 'mirror.omarchy.org' /etc/pacman.d/mirrorlist ||
+    sed -i '1i Server = https://mirror.omarchy.org/$repo/os/$arch' /etc/pacman.d/mirrorlist
+
+  for attempt in 1 2 3; do
+    pacman -Syu --noconfirm --needed "$@" >/dev/null && return 0
+    echo "pacman failed, attempt $attempt of 3; trying again in 15 s" >&2
+    sleep 15
+  done
+  echo "::error::the container could not install: $*" >&2
+  return 1
+}

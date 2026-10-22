@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Builds agentv and agentv-keyring into a signed pacman repository in
+# <repo-dir>. A package that's already there at the same version is kept as
+# it is, so a box never sees two different files for one version. Runs as
+# root in an Arch container; makepkg runs as a throwaway user.
+#
+# Usage: bin/build <repo-dir>
+# Needs: AGENTV_CHANNEL, AGENTV_SOURCE, AGENTV_REF, AGENTV_REPO_URL and
+# AGENTV_SIGNING_KEY (the armored secret key, from an Actions secret).
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo=$(realpath "${1:?usage: bin/build <repo-dir>}")
+
+: "${AGENTV_CHANNEL:?}" "${AGENTV_SOURCE:?}" "${AGENTV_REF:?}" "${AGENTV_REPO_URL:?}"
+if [[ -z ${AGENTV_SIGNING_KEY:-} ]]; then
+  echo "::error::AGENTV_SIGNING_KEY is empty. Packages are only ever published signed." >&2
+  exit 1
+fi
+
+# shellcheck source=bin/arch-container-setup
+source "$ROOT/bin/arch-container-setup"
+arch_container_setup base-devel git
+
+useradd -m builder
+work=/home/builder/work
+mkdir -p "$work"
+cp -r "$ROOT/agentv" "$ROOT/agentv-keyring" "$work/"
+chown -R builder:builder "$work"
+
+as_builder() {
+  setpriv --reuid=builder --regid=builder --init-groups \
+    env HOME=/home/builder GNUPGHOME=/home/builder/.gnupg \
+    AGENTV_CHANNEL="$AGENTV_CHANNEL" AGENTV_SOURCE="$AGENTV_SOURCE" \
+    AGENTV_REF="$AGENTV_REF" AGENTV_REPO_URL="$AGENTV_REPO_URL" "$@"
+}
+
+# The key lives only in this container's keyring and is gone with it.
+as_builder mkdir -m 700 -p /home/builder/.gnupg
+printf '%s\n' "$AGENTV_SIGNING_KEY" | as_builder gpg --batch --quiet --import
+fpr=$(as_builder gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+trusted=$(cut -d: -f1 "$ROOT/agentv-keyring/agentv-trusted")
+if [[ $fpr != "$trusted" ]]; then
+  echo "::error::the signing key ($fpr) isn't the one agentv-keyring trusts ($trusted)" >&2
+  exit 1
+fi
+
+current=()
+for pkg in agentv-keyring agentv; do
+  cd "$work/$pkg"
+
+  # Fetch the source and run pkgver(), so the package list has the version
+  # this build would make.
+  as_builder makepkg --nobuild --nodeps --noprepare >/dev/null
+  mapfile -t files < <(as_builder makepkg --packagelist)
+
+  for file in "${files[@]}"; do
+    name=${file##*/}
+    current+=("$name")
+    if [[ -f $repo/$name && -f $repo/$name.sig ]]; then
+      echo "Keeping $name, already published"
+      continue
+    fi
+    echo "Building $name"
+    as_builder makepkg --force --nodeps --sign --key "$fpr" >/dev/null
+    cp "$file" "$file.sig" "$repo/"
+  done
+done
+
+cd "$repo"
+
+# Only this build's packages are in the repository.
+for file in *.pkg.tar.*; do
+  [[ -f $file ]] || continue
+  name=${file%.sig}
+  printf '%s\n' "${current[@]}" | grep -qxF "$name" || rm -f "$file"
+done
+rm -f agentv.db* agentv.files*
+
+for name in "${current[@]}"; do
+  as_builder gpg --batch --quiet --verify "$name.sig" "$name"
+done
+
+chown builder "$repo"
+as_builder repo-add --quiet --sign --key "$fpr" agentv.db.tar.gz "${current[@]}"
+
+# GitHub release assets can't be symlinks, so pacman's names become copies.
+for db in agentv.db agentv.files; do
+  rm -f "$db" "$db.sig"
+  cp "$db.tar.gz" "$db"
+  cp "$db.tar.gz.sig" "$db.sig"
+done
+
+ls -l "$repo"

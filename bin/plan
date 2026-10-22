@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Decides which channels need a new build, as JSON for the build workflow's
+# matrix: [{"channel": "edge", "ref": "commit=<sha>"}, ...].
+#
+#   stable: agentv-os's newest release tag (v0.x), once it's not published yet
+#   edge:   the newest commit of agentv whose Check run passed, likewise
+#
+# A run by hand can name both instead: bin/plan <channel> <ref>. With --all it
+# lists both channels' current refs even when they're published, which is what
+# a change to the PKGBUILDs needs: bin/build keeps every file whose name
+# (version and pkgrel) is already published, and rebuilds the rest. Reads the
+# owner from GitHub's own context, so no owner is written here.
+
+set -euo pipefail
+
+owner="${GITHUB_REPOSITORY_OWNER:?}"
+pkgs="${GITHUB_REPOSITORY:?}"
+
+all=0
+if [[ ${1:-} == "--all" ]]; then
+  all=1
+  shift
+fi
+
+if [[ -n ${1:-} ]]; then
+  jq -cn --arg channel "$1" --arg ref "${2:?a channel needs a ref, like tag=v0.1.0 or commit=<sha>}" \
+    '[{channel: $channel, ref: $ref}]'
+  exit 0
+fi
+
+published() {
+  gh release view "$1" -R "$pkgs" --json assets --jq '.assets[].name' 2>/dev/null || true
+}
+
+plan=()
+
+tag=$(gh api "repos/$owner/agentv-os/tags?per_page=100" --jq '.[].name' |
+  grep -E '^v0\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
+if [[ -n $tag ]] && { (( all )) || ! published stable | grep -qE "^agentv-${tag#v}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
+  plan+=("$(jq -cn --arg ref "tag=$tag" '{channel: "stable", ref: $ref}')")
+fi
+
+sha=$(gh api "repos/$owner/agentv-os/actions/workflows/check.yml/runs?branch=agentv&event=push&status=success&per_page=1" \
+  --jq '.workflow_runs[0].head_sha // empty')
+if [[ -n $sha ]] && { (( all )) || ! published edge | grep -qE "\.g${sha:0:7}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
+  plan+=("$(jq -cn --arg ref "commit=$sha" '{channel: "edge", ref: $ref}')")
+fi
+
+printf '%s\n' ${plan[@]+"${plan[@]}"} | jq -cs .

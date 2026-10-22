@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Publishes a built repository as the assets of the release named after its
+# channel. New packages go up first, then the databases that point at them,
+# and only then do old packages come down, so a box reading the release
+# mid-publish never finds a database pointing at a missing file.
+#
+# Usage: bin/publish <channel> <repo-dir>
+
+set -euo pipefail
+
+channel="${1:?usage: bin/publish <channel> <repo-dir>}"
+repo="${2:?usage: bin/publish <channel> <repo-dir>}"
+pkgs="${GITHUB_REPOSITORY:?}"
+
+if ! gh release view "$channel" -R "$pkgs" >/dev/null 2>&1; then
+  # Only stable is a full release; edge is for development (ADR-025).
+  prerelease=()
+  [[ $channel == "stable" ]] || prerelease=(--prerelease)
+  gh release create "$channel" -R "$pkgs" --target "${GITHUB_SHA:?}" \
+    --title "AgenTV packages: $channel" \
+    --notes "AgenTV's pacman repository for the $channel channel. Boxes read it from here; there's nothing to download by hand." \
+    ${prerelease[@]+"${prerelease[@]}"}
+fi
+
+existing=$(gh release view "$channel" -R "$pkgs" --json assets --jq '.assets[].name')
+
+new=()
+for file in "$repo"/*.pkg.tar.*; do
+  grep -qxF "${file##*/}" <<<"$existing" || new+=("$file")
+done
+(( ${#new[@]} == 0 )) || gh release upload "$channel" -R "$pkgs" "${new[@]}"
+
+gh release upload "$channel" -R "$pkgs" --clobber \
+  "$repo"/agentv.db "$repo"/agentv.db.sig "$repo"/agentv.files "$repo"/agentv.files.sig \
+  "$repo"/agentv.db.tar.gz "$repo"/agentv.db.tar.gz.sig \
+  "$repo"/agentv.files.tar.gz "$repo"/agentv.files.tar.gz.sig
+
+while IFS= read -r asset; do
+  [[ $asset == *.pkg.tar.* && ! -f $repo/$asset ]] || continue
+  gh release delete-asset "$channel" "$asset" -R "$pkgs" --yes
+done <<<"$existing"
+
+echo "Published $channel:"
+ls "$repo"

@@ -1,0 +1,77 @@
+# AgenTV's own package: everything AgenTV adds to a box, beside Omarchy's
+# package and never inside /usr/share/omarchy, which Omarchy's update owns
+# (ADR-025). CI builds it from agentv-os: at a release tag for stable, at the
+# newest green commit of agentv for edge.
+#
+# Where the source is and where updates come from are set by the build, not
+# written here, so moving the repos to another owner changes no code:
+#   AGENTV_SOURCE    git URL of agentv-os
+#   AGENTV_REF       tag=v0.1.0 or commit=<sha>
+#   AGENTV_CHANNEL   stable or edge
+#   AGENTV_REPO_URL  https://github.com/<owner>/agentv-pkgs/releases/download
+
+pkgname=agentv
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="AgenTV, a TV OS whose own agent builds the apps it's missing. Powered by Omarchy"
+arch=(any)
+url="${AGENTV_SOURCE%.git}"
+license=(MIT)
+depends=(omarchy agentv-keyring bash chromium curl jq python)
+makedepends=(git)
+install=agentv.install
+source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
+sha256sums=(SKIP)
+
+pkgver() {
+  cd agentv-os
+
+  # A release is its tag, v0.1.0 -> 0.1.0. Between releases it's the last one
+  # plus commits, 0.1.0.r3.gabc1234, which sorts after 0.1.0 and before 0.1.1.
+  # Omarchy's own tags in this history start at v1, so v0.* is only AgenTV's
+  # while AgenTV is 0.x (phase 1).
+  if git describe --exact-match --tags --match 'v0.*' >/dev/null 2>&1; then
+    git describe --exact-match --tags --match 'v0.*' | sed 's/^v//'
+  elif git describe --long --tags --match 'v0.*' >/dev/null 2>&1; then
+    git describe --long --tags --match 'v0.*' | sed 's/^v//; s/-\([0-9]*\)-g/.r\1.g/'
+  else
+    printf '0.0.0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+package() {
+  : "${AGENTV_CHANNEL:?set AGENTV_CHANNEL}"
+  : "${AGENTV_REPO_URL:?set AGENTV_REPO_URL}"
+  cd agentv-os
+
+  local share="$pkgdir/usr/share/agentv"
+  local file
+
+  # Commands. bin/agentv-check is the developers' gate, not the box's.
+  for file in bin/agentv bin/agentv-*; do
+    [[ ${file##*/} == agentv-check ]] && continue
+    install -Dm755 "$file" "$pkgdir/usr/bin/${file##*/}"
+  done
+
+  # AgenTV's migrations, run by its post-update hook.
+  install -d "$share/migrations"
+  for file in migrations/agentv/*.sh; do
+    [[ -f $file ]] && install -Dm644 "$file" "$share/migrations/${file##*/}"
+  done
+
+  # Hooks into Omarchy's update. First boot copies them into the owner's
+  # ~/.config, and /etc/skel hands them to any user made after this package.
+  for file in config/omarchy/hooks/*/agentv; do
+    install -Dm644 "$file" "$share/$file"
+    install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
+  done
+
+  # Where this box's updates come from, read by agentv-pacman-conf.
+  printf '%s\n' \
+    "AGENTV_VERSION=$pkgver" \
+    "AGENTV_CHANNEL=$AGENTV_CHANNEL" \
+    "AGENTV_REPO_URL=$AGENTV_REPO_URL" >"$share/settings"
+  chmod 644 "$share/settings"
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
