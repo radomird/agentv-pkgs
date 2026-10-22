@@ -18,7 +18,7 @@ arch=(any)
 url="${AGENTV_SOURCE%.git}"
 license=(MIT)
 options=(!debug)
-depends=(omarchy agentv-keyring bash chromium curl jq python)
+depends=(omarchy agentv-keyring bash chromium curl jq python uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -65,6 +65,21 @@ package() {
   for file in config/omarchy/hooks/*/agentv; do
     install -Dm644 "$file" "$share/$file"
     install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
+  done
+
+  # First boot, the daemon and the TV setup screens. A folder that isn't in
+  # this commit of agentv-os yet is skipped, so older refs still build.
+  for file in install/tv/*.sh daemon/*.py setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
+    [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
+  done
+
+  # AgenTV's units, enabled by the package itself: the installer needs no
+  # extra step, and agentv-firstboot.service only ever runs once.
+  for unit in system/*.service; do
+    [[ -f $unit ]] || continue
+    install -Dm644 "$unit" "$pkgdir/usr/lib/systemd/system/${unit##*/}"
+    install -d "$pkgdir/usr/lib/systemd/system/multi-user.target.wants"
+    ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/${unit##*/}"
   done
 
   # Where this box's updates come from, read by agentv-pacman-conf.
