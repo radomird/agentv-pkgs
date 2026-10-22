@@ -8,6 +8,7 @@ pkgrel=1
 pkgdesc="The key AgenTV's packages are signed with"
 arch=(any)
 license=(MIT)
+options=(!debug)
 install=agentv-keyring.install
 source=(agentv.gpg agentv-trusted agentv-revoked)
 sha256sums=(

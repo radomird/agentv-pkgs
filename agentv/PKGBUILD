@@ -17,6 +17,7 @@ pkgdesc="AgenTV, a TV OS whose own agent builds the apps it's missing. Powered b
 arch=(any)
 url="${AGENTV_SOURCE%.git}"
 license=(MIT)
+options=(!debug)
 depends=(omarchy agentv-keyring bash chromium curl jq python)
 makedepends=(git)
 install=agentv.install

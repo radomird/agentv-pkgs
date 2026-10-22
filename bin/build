@@ -56,15 +56,20 @@ for pkg in agentv-keyring agentv; do
   as_builder makepkg --nobuild --nodeps --noprepare >/dev/null
   mapfile -t files < <(as_builder makepkg --packagelist)
 
+  missing=0
   for file in "${files[@]}"; do
-    name=${file##*/}
-    current+=("$name")
-    if [[ -f $repo/$name && -f $repo/$name.sig ]]; then
-      echo "Keeping $name, already published"
-      continue
-    fi
-    echo "Building $name"
-    as_builder makepkg --force --nodeps --sign --key "$fpr" >/dev/null
+    current+=("${file##*/}")
+    [[ -f $repo/${file##*/} && -f $repo/${file##*/}.sig ]] || missing=1
+  done
+
+  if (( missing == 0 )); then
+    echo "Keeping $pkg ${files[*]##*/}, already published"
+    continue
+  fi
+
+  echo "Building $pkg"
+  as_builder makepkg --force --nodeps --sign --key "$fpr" >/dev/null
+  for file in "${files[@]}"; do
     cp "$file" "$file.sig" "$repo/"
   done
 done
