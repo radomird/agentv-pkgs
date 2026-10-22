@@ -86,7 +86,8 @@ package() {
   printf '%s\n' \
     "AGENTV_VERSION=$pkgver" \
     "AGENTV_CHANNEL=$AGENTV_CHANNEL" \
-    "AGENTV_REPO_URL=$AGENTV_REPO_URL" >"$share/settings"
+    "AGENTV_REPO_URL=$AGENTV_REPO_URL" \
+    "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" >"$share/settings"
   chmod 644 "$share/settings"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

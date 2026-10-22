@@ -54,6 +54,13 @@ for pkg in agentv-keyring agentv; do
   # Fetch the source and run pkgver(), so the package list has the version
   # this build would make.
   as_builder makepkg --nobuild --nodeps --noprepare >/dev/null
+
+  # The image layer's update test (S0.5) builds the same commit again with a
+  # higher pkgrel, to have something newer to update to. makepkg puts pkgrel
+  # back to 1 whenever pkgver() moves the version, so this goes in after it.
+  if [[ $pkg == agentv && -n ${AGENTV_PKGREL:-} ]]; then
+    as_builder sed -i "s/^pkgrel=.*/pkgrel=$AGENTV_PKGREL/" PKGBUILD
+  fi
   mapfile -t files < <(as_builder makepkg --packagelist)
 
   missing=0
