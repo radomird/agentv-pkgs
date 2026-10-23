@@ -82,6 +82,12 @@ package() {
     ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/${unit##*/}"
   done
 
+  # AgenTV's pacman hooks, such as the one that keeps its logo on the boot
+  # splash when Omarchy's settings package puts Omarchy's back.
+  for hook in system/*.hook; do
+    [[ -f $hook ]] && install -Dm644 "$hook" "$pkgdir/usr/share/libalpm/hooks/${hook##*/}"
+  done
+
   # Where this box's updates come from, read by agentv-pacman-conf.
   printf '%s\n' \
     "AGENTV_VERSION=$pkgver" \
