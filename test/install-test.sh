@@ -111,6 +111,16 @@ if [[ -f /usr/bin/agentv-app-install ]]; then
   pass "the app installer ships whole, and knows where the app index lives"
 fi
 
+# Every AgenTV file a system unit runs is in the package, so a unit never
+# points at a file an older package had, as the daemon's once pointed at the
+# stage 0 placeholder.
+for unit in /usr/lib/systemd/system/agentv-*.service; do
+  while IFS= read -r file; do
+    [[ -f $file ]] || fail "${unit##*/} runs $file, which the package doesn't have"
+  done < <(grep -o '/usr/share/agentv/[^ ]*' "$unit")
+done
+pass "every AgenTV file a system unit runs is in the package"
+
 [[ ! -e /usr/bin/agentv-check ]] || fail "the developers' gate isn't on the box"
 pass "the developers' gate isn't on the box"
 
