@@ -72,6 +72,20 @@ pass "agentv version names the version and channel"
   -f /etc/skel/.config/omarchy/hooks/post-update.d/agentv ]] || fail "the post-update hook ships for new and existing users"
 pass "the post-update hook ships for new and existing users"
 
+# From stage 1 on: the TV session ships whole, or not at all (ADR-031).
+if [[ -f /usr/share/agentv/session/hypr.lua ]]; then
+  for file in /usr/share/wayland-sessions/agentv.desktop /usr/bin/agentv-session \
+    /usr/lib/systemd/user/agentv-tv.target /usr/lib/systemd/user/agentv-screen.service \
+    /usr/lib/systemd/user/agentv-input.service /usr/lib/systemd/user/agentv-toast.service \
+    /usr/lib/udev/rules.d/70-agentv-uinput.rules /usr/share/agentv/daemon/screen.ts \
+    /usr/share/agentv/daemon/package.json /usr/share/agentv/daemon/input.py /usr/share/agentv/session/toast/shell.qml; do
+    [[ -f $file ]] || fail "the TV session ships whole: $file is missing"
+  done
+  [[ ! -e /usr/lib/systemd/system/multi-user.target.wants/agentv-screen.service ]] ||
+    fail "the TV session's units are the owner's, not the system's"
+  pass "the TV session ships whole: its entry, its Hyprland setup, its units and its daemon"
+fi
+
 [[ ! -e /usr/bin/agentv-check ]] || fail "the developers' gate isn't on the box"
 pass "the developers' gate isn't on the box"
 
