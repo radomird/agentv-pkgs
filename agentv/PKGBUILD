@@ -18,7 +18,9 @@ arch=(any)
 url="${AGENTV_SOURCE%.git}"
 license=(MIT)
 options=(!debug)
-depends=(omarchy agentv-keyring bash chromium curl jq python uwsm)
+# nodejs runs the screen daemon's TypeScript as it is, gamescope runs Steam
+# in the TV session, and quickshell draws its toasts (ADR-031).
+depends=(omarchy agentv-keyring bash chromium curl gamescope hyprland jq nodejs python quickshell uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -67,10 +69,29 @@ package() {
     install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
   done
 
-  # First boot, the daemon and the TV setup screens. A folder that isn't in
-  # this commit of agentv-os yet is skipped, so older refs still build.
-  for file in install/tv/*.sh daemon/*.py setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
+  # First boot, the daemon, the TV session's own Hyprland setup and toasts,
+  # and the TV setup screens. A folder that isn't in this commit of
+  # agentv-os yet is skipped, so older refs still build.
+  for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
+    setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
+  done
+
+  # The TV session, for the login manager (ADR-031).
+  if [[ -f session/agentv.desktop ]]; then
+    install -Dm644 session/agentv.desktop "$pkgdir/usr/share/wayland-sessions/agentv.desktop"
+  fi
+
+  # The TV session's own units: the screen daemon, the virtual input device
+  # and the toasts, under agentv-tv.target, which the session starts itself.
+  for unit in system/user/*.service system/user/*.target; do
+    [[ -f $unit ]] && install -Dm644 "$unit" "$pkgdir/usr/lib/systemd/user/${unit##*/}"
+  done
+
+  # udev rules, such as the one that lets the person on the screen make the
+  # virtual input device.
+  for rule in system/*.rules; do
+    [[ -f $rule ]] && install -Dm644 "$rule" "$pkgdir/usr/lib/udev/rules.d/${rule##*/}"
   done
 
   # AgenTV's units, enabled by the package itself: the installer needs no
