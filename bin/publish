@@ -34,7 +34,8 @@ done
 gh release upload "$channel" -R "$pkgs" --clobber \
   "$repo"/agentv.db "$repo"/agentv.db.sig "$repo"/agentv.files "$repo"/agentv.files.sig \
   "$repo"/agentv.db.tar.gz "$repo"/agentv.db.tar.gz.sig \
-  "$repo"/agentv.files.tar.gz "$repo"/agentv.files.tar.gz.sig
+  "$repo"/agentv.files.tar.gz "$repo"/agentv.files.tar.gz.sig \
+  "$repo"/release.json "$repo"/release.json.sig
 
 while IFS= read -r asset; do
   [[ $asset == *.pkg.tar.* && ! -f $repo/$asset ]] || continue

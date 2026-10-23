@@ -22,7 +22,7 @@ fi
 
 # shellcheck source=bin/arch-container-setup
 source "$ROOT/bin/arch-container-setup"
-arch_container_setup base-devel git
+arch_container_setup base-devel git jq
 
 useradd -m builder
 work=/home/builder/work
@@ -97,6 +97,31 @@ done
 
 chown builder "$repo"
 as_builder repo-add --quiet --sign --key "$fpr" agentv.db.tar.gz "${current[@]}"
+
+# release.json, for Settings → Updates (ADR-025): the version, the date, a
+# security flag and What's new, signed like the packages. What's new comes
+# from agentv-os's release-notes/<version>.txt, up to five lines, for a
+# release; a first line of "security" marks a security release. Edge builds
+# have no notes.
+version=$(printf '%s\n' "${current[@]}" | sed -nE 's/^agentv-([0-9][^-]*)-[0-9]+-any\.pkg\.tar\.zst$/\1/p' | head -n 1)
+source_dir="$work/agentv/src/agentv-os"
+notes_file="$source_dir/release-notes/$version.txt"
+date=$(git -C "$source_dir" log -1 --format=%cI 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
+security=false
+notes=()
+if [[ -f $notes_file ]]; then
+  mapfile -t notes < <(grep -v '^[[:space:]]*$' "$notes_file")
+  if [[ ${notes[0]:-} == "security" ]]; then
+    security=true
+    notes=("${notes[@]:1}")
+  fi
+fi
+jq -n --arg version "$version" --arg date "$date" --arg channel "$AGENTV_CHANNEL" --argjson security "$security" \
+  '{version: $version, date: $date, channel: $channel, security: $security, notes: ($ARGS.positional[:5])}' \
+  --args ${notes[@]+"${notes[@]}"} >release.json
+chown builder release.json
+as_builder gpg --batch --yes --quiet --local-user "$fpr" --detach-sign --output release.json.sig release.json
+cat release.json
 
 # GitHub release assets can't be symlinks, so pacman's names become copies.
 for db in agentv.db agentv.files; do
