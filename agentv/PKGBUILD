@@ -20,7 +20,8 @@ license=(MIT)
 options=(!debug)
 # nodejs runs the screen daemon's TypeScript as it is, gamescope runs Steam
 # in the TV session, and quickshell draws its toasts (ADR-031).
-depends=(omarchy agentv-keyring bash chromium curl gamescope hyprland jq nodejs python quickshell uwsm)
+# git and gnupg fetch and check apps from the signed app index.
+depends=(omarchy agentv-keyring bash chromium curl gamescope git gnupg hyprland jq nodejs python quickshell uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -73,7 +74,7 @@ package() {
   # the app contract and the TV setup screens. A folder that isn't in this
   # commit of agentv-os yet is skipped, so older refs still build.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    apps/package.json apps/contract/*.ts \
+    daemon/apps/*.ts apps/package.json apps/contract/*.ts \
     setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
   done
@@ -110,12 +111,15 @@ package() {
     [[ -f $hook ]] && install -Dm644 "$hook" "$pkgdir/usr/share/libalpm/hooks/${hook##*/}"
   done
 
-  # Where this box's updates come from, read by agentv-pacman-conf.
+  # Where this box's updates come from, read by agentv-pacman-conf, and where
+  # its apps come from, read by agentv app install. The app index will live in
+  # agentv-index (coming soon).
   printf '%s\n' \
     "AGENTV_VERSION=$pkgver" \
     "AGENTV_CHANNEL=$AGENTV_CHANNEL" \
     "AGENTV_REPO_URL=$AGENTV_REPO_URL" \
-    "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" >"$share/settings"
+    "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" \
+    "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-index/releases/download/index" >"$share/settings"
   chmod 644 "$share/settings"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"

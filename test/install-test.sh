@@ -98,6 +98,19 @@ if [[ -f /usr/bin/agentv-app-validate ]]; then
   pass "the app contract ships whole, and agentv app validate runs"
 fi
 
+# From stage 2 on: the app installer ships with the contract, and knows where
+# the signed app index lives.
+if [[ -f /usr/bin/agentv-app-install ]]; then
+  for file in /usr/share/agentv/daemon/apps/index.ts /usr/share/agentv/daemon/apps/install.ts \
+    /usr/share/agentv/daemon/apps/cli.ts /usr/bin/agentv-app-list /usr/bin/agentv-app-remove; do
+    [[ -f $file ]] || fail "the app installer ships whole: $file is missing"
+  done
+  grep -q '^AGENTV_INDEX_URL=https://github.com/.*/agentv-index/releases/download/index$' /usr/share/agentv/settings ||
+    fail "the package says where the app index lives"
+  [[ -z $(agentv app list) ]] || fail "a new box has no apps installed"
+  pass "the app installer ships whole, and knows where the app index lives"
+fi
+
 [[ ! -e /usr/bin/agentv-check ]] || fail "the developers' gate isn't on the box"
 pass "the developers' gate isn't on the box"
 
