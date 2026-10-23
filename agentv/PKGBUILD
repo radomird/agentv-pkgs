@@ -70,9 +70,10 @@ package() {
   done
 
   # First boot, the daemon, the TV session's own Hyprland setup and toasts,
-  # and the TV setup screens. A folder that isn't in this commit of
-  # agentv-os yet is skipped, so older refs still build.
+  # the app contract and the TV setup screens. A folder that isn't in this
+  # commit of agentv-os yet is skipped, so older refs still build.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
+    apps/package.json apps/contract/*.ts \
     setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
   done

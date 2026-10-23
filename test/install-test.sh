@@ -86,6 +86,18 @@ if [[ -f /usr/share/agentv/session/hypr.lua ]]; then
   pass "the TV session ships whole: its entry, its Hyprland setup, its units and its daemon"
 fi
 
+# From stage 2 on: the app contract and its validator ship together.
+if [[ -f /usr/bin/agentv-app-validate ]]; then
+  for file in /usr/share/agentv/apps/package.json /usr/share/agentv/apps/contract/contract.ts \
+    /usr/share/agentv/apps/contract/manifest.ts /usr/share/agentv/apps/contract/validate.ts; do
+    [[ -f $file ]] || fail "the app contract ships whole: $file is missing"
+  done
+  status=0
+  agentv app validate >/dev/null 2>&1 || status=$?
+  (( status == 2 )) || fail "agentv app validate runs on the box (it exited $status, not 2 for no package)"
+  pass "the app contract ships whole, and agentv app validate runs"
+fi
+
 [[ ! -e /usr/bin/agentv-check ]] || fail "the developers' gate isn't on the box"
 pass "the developers' gate isn't on the box"
 
