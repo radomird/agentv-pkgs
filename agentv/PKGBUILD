@@ -16,7 +16,7 @@ pkgrel=1
 pkgdesc="AgenTV, a TV OS whose own agent builds the apps it's missing. Powered by Omarchy"
 arch=(any)
 url="${AGENTV_SOURCE%.git}"
-license=(MIT)
+license=(MIT LicenseRef-AgenTV-sounds)
 options=(!debug)
 # nodejs runs the screen daemon's TypeScript as it is, gamescope runs Steam
 # in the TV session, and quickshell draws its toasts (ADR-031).
@@ -71,10 +71,13 @@ package() {
   done
 
   # First boot, the daemon, the TV session's own Hyprland setup and toasts,
-  # the app contract and the TV setup screens. A folder that isn't in this
-  # commit of agentv-os yet is skipped, so older refs still build.
+  # the app contract, the home screen, the template that gives it the
+  # Omarchy theme's colours, and the TV setup screens. A folder that isn't in
+  # this commit of agentv-os yet is skipped, so older refs still build.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
     daemon/apps/*.ts apps/package.json apps/contract/*.ts \
+    launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
+    config/omarchy/themed/*.tpl \
     setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
   done
@@ -123,4 +126,8 @@ package() {
   chmod 644 "$share/settings"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  # The home screen's sounds aren't MIT: they ship only with AgenTV.
+  if [[ -f launcher/sounds/LICENSE ]]; then
+    install -Dm644 launcher/sounds/LICENSE "$pkgdir/usr/share/licenses/$pkgname/sounds"
+  fi
 }

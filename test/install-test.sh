@@ -111,6 +111,31 @@ if [[ -f /usr/bin/agentv-app-install ]]; then
   pass "the app installer ships whole, and knows where the app index lives"
 fi
 
+# From stage 2 on: the home screen ships with its sounds, their own licence,
+# and the template and hook that give it the Omarchy theme's colours.
+if [[ -f /usr/share/agentv/launcher/index.html ]]; then
+  for file in /usr/share/agentv/launcher/package.json /usr/share/agentv/launcher/main.ts \
+    /usr/share/agentv/launcher/launcher.css /usr/share/agentv/launcher/motion.css /usr/share/agentv/launcher/pages/home.ts \
+    /usr/share/agentv/config/omarchy/themed/launcher.css.tpl /usr/share/agentv/config/omarchy/hooks/theme-set.d/agentv \
+    /usr/bin/agentv-theme-sync /usr/lib/systemd/user/agentv-theme.service /usr/share/licenses/agentv/sounds; do
+    [[ -f $file ]] || fail "the home screen ships whole: $file is missing"
+  done
+  for sound in move select forward back confirm success failure; do
+    [[ -f /usr/share/agentv/launcher/sounds/$sound.ogg ]] || fail "the home screen ships whole: the $sound sound is missing"
+  done
+  pass "the home screen ships whole, with its sounds, their licence and the theme's template"
+fi
+
+# Every module AgenTV's TypeScript imports is in the package: the daemon and
+# the home screen import each other's files, and a missing one only shows
+# when the daemon starts or the TV draws the page.
+while IFS= read -r file; do
+  while IFS= read -r module; do
+    [[ -f $(dirname "$file")/$module ]] || fail "${file#/usr/share/agentv/} imports $module, which the package doesn't have"
+  done < <(grep -oE "from \"\.\.?/[^\"]+\"" "$file" | sed -E 's/^from "(.*)"$/\1/')
+done < <(find /usr/share/agentv -name '*.ts' -not -path '*/node_modules/*')
+pass "every module AgenTV's TypeScript imports is in the package"
+
 # Every AgenTV file a system unit runs is in the package, so a unit never
 # points at a file an older package had, as the daemon's once pointed at the
 # stage 0 placeholder.
