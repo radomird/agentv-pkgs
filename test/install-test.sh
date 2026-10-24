@@ -133,6 +133,20 @@ if [[ -f /usr/share/agentv/daemon/tv-power.ts ]]; then
   pass "wired connections get wake-on-LAN"
 fi
 
+# From stage 2 on: the daily update check is enabled, the install from the TV
+# isn't (the TV starts it), and polkit lets the TV start the two.
+if [[ -f /usr/lib/systemd/system/agentv-update-check.timer ]]; then
+  [[ -L /usr/lib/systemd/system/timers.target.wants/agentv-update-check.timer ]] ||
+    fail "the daily update check is enabled"
+  [[ ! -e /usr/lib/systemd/system/multi-user.target.wants/agentv-update-tv.service ]] ||
+    fail "an update from the TV only runs when the TV starts it"
+  [[ -L /usr/lib/systemd/system/multi-user.target.wants/agentv-daemon.service ]] ||
+    fail "AgenTV's daemon is still enabled"
+  grep -q 'agentv-update-tv.service' /usr/share/polkit-1/rules.d/50-agentv-update.rules ||
+    fail "polkit lets the TV start an update"
+  pass "the daily update check is enabled, and the TV may start an update"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page.
