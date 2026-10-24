@@ -108,6 +108,12 @@ package() {
     ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/system/multi-user.target.wants/${unit##*/}"
   done
 
+  # NetworkManager's defaults for AgenTV, such as wake-on-LAN on every wired
+  # connection. Package-owned, so /etc stays the owner's.
+  for conf in system/networkmanager/*.conf; do
+    [[ -f $conf ]] && install -Dm644 "$conf" "$pkgdir/usr/lib/NetworkManager/conf.d/${conf##*/}"
+  done
+
   # AgenTV's pacman hooks, such as the one that keeps its logo on the boot
   # splash when Omarchy's settings package puts Omarchy's back.
   for hook in system/*.hook; do

@@ -126,6 +126,13 @@ if [[ -f /usr/share/agentv/launcher/index.html ]]; then
   pass "the home screen ships whole, with its sounds, their licence and the theme's template"
 fi
 
+# From stage 2 on: wake-on-LAN for every wired connection (ADR-031).
+if [[ -f /usr/share/agentv/daemon/tv-power.ts ]]; then
+  grep -qx 'ethernet.wake-on-lan=64' /usr/lib/NetworkManager/conf.d/90-agentv-wol.conf ||
+    fail "wired connections get wake-on-LAN"
+  pass "wired connections get wake-on-LAN"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page.
