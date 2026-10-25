@@ -73,11 +73,12 @@ package() {
   done
 
   # First boot, the daemon, the TV session's own Hyprland setup and toasts,
-  # the app contract, the home screen, the template that gives it the
-  # Omarchy theme's colours, and the TV setup screens. A folder that isn't in
-  # this commit of agentv-os yet is skipped, so older refs still build.
+  # the app contract and the built-in apps, the home screen, the template
+  # that gives it the Omarchy theme's colours, and the TV setup screens. A
+  # folder that isn't in this commit of agentv-os yet is skipped, so older
+  # refs still build.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    daemon/apps/*.ts apps/package.json apps/contract/*.ts \
+    daemon/apps/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     config/omarchy/themed/*.tpl \
     setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
@@ -132,11 +133,13 @@ package() {
     [[ -f $hook ]] && install -Dm644 "$hook" "$pkgdir/usr/share/libalpm/hooks/${hook##*/}"
   done
 
-  # Where this box's updates come from, read by agentv-pacman-conf, and where
-  # its apps come from, read by agentv app install. The app index will live in
-  # agentv-index (coming soon).
+  # Where this box's updates come from, read by agentv-pacman-conf, where its
+  # apps come from, read by agentv app install, and AgenTV's own address,
+  # which every request an app makes names (MET Norway asks for one). The
+  # app index will live in agentv-index (coming soon).
   printf '%s\n' \
     "AGENTV_VERSION=$pkgver" \
+    "AGENTV_HOMEPAGE=${AGENTV_SOURCE%.git}" \
     "AGENTV_CHANNEL=$AGENTV_CHANNEL" \
     "AGENTV_REPO_URL=$AGENTV_REPO_URL" \
     "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" \
