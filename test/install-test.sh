@@ -149,6 +149,15 @@ if [[ -f /usr/share/agentv/launcher/index.html ]]; then
   pass "the home screen ships whole, with its sounds, their licence and the theme's template"
 fi
 
+# From stage 4 on: the daemon serves the phone companion's page, so it ships
+# with the daemon that pairs phones.
+if [[ -f /usr/share/agentv/daemon/phones.ts ]]; then
+  for file in index.html companion.css main.ts; do
+    [[ -f /usr/share/agentv/companion-web/$file ]] || fail "the phone companion ships whole: companion-web/$file is missing"
+  done
+  pass "the phone companion's page ships with the daemon"
+fi
+
 # From stage 2 on: wake-on-LAN for every wired connection (ADR-031).
 if [[ -f /usr/share/agentv/daemon/tv-power.ts ]]; then
   grep -qx 'ethernet.wake-on-lan=64' /usr/lib/NetworkManager/conf.d/90-agentv-wol.conf ||
@@ -168,6 +177,18 @@ if [[ -f /usr/lib/systemd/system/agentv-update-check.timer ]]; then
   grep -q 'agentv-update-tv.service' /usr/share/polkit-1/rules.d/50-agentv-update.rules ||
     fail "polkit lets the TV start an update"
   pass "the daily update check is enabled, and the TV may start an update"
+fi
+
+# From stage 4 on: the provider key's hand-over is enabled, and the move as
+# root only runs when the daemon leaves a key (S4.6).
+if [[ -f /usr/bin/agentv-key-store ]]; then
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-key.path ]] ||
+    fail "the provider key's hand-over is enabled"
+  [[ -f /usr/lib/systemd/system/agentv-key.service ]] || fail "the move as root is there"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-key.service" >/dev/null; then
+    fail "the move as root only runs when the daemon leaves a key"
+  fi
+  pass "the provider key's hand-over is enabled, and the move as root waits for a key"
 fi
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
