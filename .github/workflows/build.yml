@@ -105,6 +105,8 @@ jobs:
 
       - name: Install from the release, the way a box does
         run: |
+          # The test's own exit status, not tee's.
+          set -o pipefail
           version=$(find repo -maxdepth 1 -name 'agentv-[0-9]*-any.pkg.tar.zst' -printf '%f\n' |
             sed -E 's/^agentv-(.*)-[0-9]+-any\.pkg\.tar\.zst$/\1/')
           echo "agentv $version on $AGENTV_CHANNEL" | tee -a "$GITHUB_STEP_SUMMARY"
