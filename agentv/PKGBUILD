@@ -106,11 +106,12 @@ package() {
     [[ -f $rule ]] && install -Dm644 "$rule" "$pkgdir/usr/lib/udev/rules.d/${rule##*/}"
   done
 
-  # AgenTV's units and timers. The package enables each one its [Install]
-  # section asks for, so the installer needs no extra step:
-  # agentv-firstboot.service only ever runs once, and agentv-update-tv.service,
-  # with no [Install], only runs when the TV starts it.
-  for unit in system/*.service system/*.timer; do
+  # AgenTV's units, timers and path units. The package enables each one its
+  # [Install] section asks for, so the installer needs no extra step:
+  # agentv-firstboot.service only ever runs once, agentv-update-tv.service,
+  # with no [Install], only runs when the TV starts it, and agentv-key.path
+  # starts agentv-key.service when the daemon hands over a key.
+  for unit in system/*.service system/*.timer system/*.path; do
     [[ -f $unit ]] || continue
     install -Dm644 "$unit" "$pkgdir/usr/lib/systemd/system/${unit##*/}"
     target=$(sed -n 's/^WantedBy=//p' "$unit" | head -n 1)

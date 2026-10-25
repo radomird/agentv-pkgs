@@ -170,6 +170,18 @@ if [[ -f /usr/lib/systemd/system/agentv-update-check.timer ]]; then
   pass "the daily update check is enabled, and the TV may start an update"
 fi
 
+# From stage 4 on: the provider key's hand-over is enabled, and the move as
+# root only runs when the daemon leaves a key (S4.6).
+if [[ -f /usr/bin/agentv-key-store ]]; then
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-key.path ]] ||
+    fail "the provider key's hand-over is enabled"
+  [[ -f /usr/lib/systemd/system/agentv-key.service ]] || fail "the move as root is there"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-key.service" >/dev/null; then
+    fail "the move as root only runs when the daemon leaves a key"
+  fi
+  pass "the provider key's hand-over is enabled, and the move as root waits for a key"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page.
