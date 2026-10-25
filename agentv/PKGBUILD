@@ -78,12 +78,13 @@ package() {
 
   # First boot, the daemon, the TV session's own Hyprland setup and toasts,
   # the app contract and the built-in apps, the home screen, the template
-  # that gives it the Omarchy theme's colours, and the TV setup screens. A
-  # folder that isn't in this commit of agentv-os yet is skipped, so older
-  # refs still build.
+  # that gives it the Omarchy theme's colours, the phone companion's page,
+  # and the TV setup screens. A folder that isn't in this commit of agentv-os
+  # yet is skipped, so older refs still build.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
     daemon/apps/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
+    companion-web/*.html companion-web/*.css companion-web/*.ts \
     config/omarchy/themed/*.tpl \
     setup/welcome/* branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"

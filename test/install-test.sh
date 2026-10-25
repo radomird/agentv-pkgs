@@ -149,6 +149,15 @@ if [[ -f /usr/share/agentv/launcher/index.html ]]; then
   pass "the home screen ships whole, with its sounds, their licence and the theme's template"
 fi
 
+# From stage 4 on: the daemon serves the phone companion's page, so it ships
+# with the daemon that pairs phones.
+if [[ -f /usr/share/agentv/daemon/phones.ts ]]; then
+  for file in index.html companion.css main.ts; do
+    [[ -f /usr/share/agentv/companion-web/$file ]] || fail "the phone companion ships whole: companion-web/$file is missing"
+  done
+  pass "the phone companion's page ships with the daemon"
+fi
+
 # From stage 2 on: wake-on-LAN for every wired connection (ADR-031).
 if [[ -f /usr/share/agentv/daemon/tv-power.ts ]]; then
   grep -qx 'ethernet.wake-on-lan=64' /usr/lib/NetworkManager/conf.d/90-agentv-wol.conf ||
