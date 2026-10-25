@@ -29,7 +29,10 @@ fpr=$(cut -d: -f1 "$ROOT/agentv-keyring/agentv-trusted")
 
 # shellcheck source=bin/arch-container-setup
 source "$ROOT/bin/arch-container-setup"
-arch_container_setup gnupg
+# Node runs agentv app validate and agentv app list. agentv installs here
+# without its dependencies (below), so it comes on its own, as Omarchy's
+# base brings it on a box.
+arch_container_setup gnupg nodejs
 
 pacman-key --init >/dev/null 2>&1
 pacman-key --add "$ROOT/agentv-keyring/agentv.gpg" >/dev/null 2>&1
