@@ -111,6 +111,23 @@ if [[ -f /usr/bin/agentv-app-install ]]; then
   pass "the app installer ships whole, and knows where the app index lives"
 fi
 
+# From stage 3 on: the built-in apps ship whole and pass the app contract's
+# checks as AgenTV's own, and the package names AgenTV's address for the
+# User-Agent its apps' requests carry.
+if [[ -d /usr/share/agentv/apps/builtin ]]; then
+  for app in agentv.clock agentv.weather; do
+    for file in manifest.json app.ts icon.svg; do
+      [[ -f /usr/share/agentv/apps/builtin/$app/$file ]] || fail "the built-in apps ship whole: $app/$file is missing"
+    done
+  done
+  [[ -f /usr/share/agentv/apps/builtin/agentv.weather/met.ts && -f /usr/share/agentv/daemon/place.ts ]] ||
+    fail "the weather ships whole, with what it reads MET's forecast and the box's place with"
+  agentv app validate --official /usr/share/agentv/apps/builtin/* >/dev/null ||
+    fail "the built-in apps pass the app contract's checks"
+  grep -q '^AGENTV_HOMEPAGE=https://' /usr/share/agentv/settings || fail "the package names AgenTV's address"
+  pass "the built-in apps ship whole and pass the contract's checks, and the package names AgenTV's address"
+fi
+
 # From stage 2 on: the home screen ships with its sounds, their own licence,
 # and the template and hook that give it the Omarchy theme's colours.
 if [[ -f /usr/share/agentv/launcher/index.html ]]; then
