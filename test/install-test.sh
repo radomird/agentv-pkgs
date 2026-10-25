@@ -115,13 +115,16 @@ fi
 # checks as AgenTV's own, and the package names AgenTV's address for the
 # User-Agent its apps' requests carry.
 if [[ -d /usr/share/agentv/apps/builtin ]]; then
-  for app in agentv.clock agentv.weather; do
+  for app in agentv.clock agentv.weather agentv.music; do
     for file in manifest.json app.ts icon.svg; do
       [[ -f /usr/share/agentv/apps/builtin/$app/$file ]] || fail "the built-in apps ship whole: $app/$file is missing"
     done
   done
   [[ -f /usr/share/agentv/apps/builtin/agentv.weather/met.ts && -f /usr/share/agentv/daemon/place.ts ]] ||
     fail "the weather ships whole, with what it reads MET's forecast and the box's place with"
+  [[ -f /usr/share/agentv/daemon/music.ts && -f /usr/share/agentv/daemon/storage.ts && -x /usr/bin/agentv-music ]] ||
+    fail "Music ships whole, with its library, its player, its storage layer and agentv music"
+  [[ ! -e /usr/share/agentv/apps/builtin/agentv.weather/fixtures ]] || fail "an app's fixtures don't ship to the box"
   agentv app validate --official /usr/share/agentv/apps/builtin/* >/dev/null ||
     fail "the built-in apps pass the app contract's checks"
   grep -q '^AGENTV_HOMEPAGE=https://' /usr/share/agentv/settings || fail "the package names AgenTV's address"
