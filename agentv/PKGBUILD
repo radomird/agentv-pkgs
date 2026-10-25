@@ -23,7 +23,11 @@ options=(!debug)
 # git and gnupg fetch and check apps from the signed app index, and
 # pacman-contrib's checkupdates and polkit look for and install updates from
 # the TV.
-depends=(omarchy agentv-keyring bash chromium curl gamescope git gnupg hyprland jq nodejs pacman-contrib polkit python quickshell uwsm)
+# Music (ADR-017) reads tags and covers with ffmpeg, plays through mpv with
+# mpv-mpris, mounts USB drives through udisks2 and shares through gvfs.
+# Omarchy has them all today; naming them keeps Music working if it doesn't.
+depends=(omarchy agentv-keyring bash chromium curl ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland jq mpv mpv-mpris nodejs
+  pacman-contrib polkit python quickshell udisks2 uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
