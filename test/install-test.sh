@@ -216,6 +216,16 @@ if [[ -f /usr/bin/agentv-hotspot ]]; then
   pass "the setup hotspot opens only when it's needed, with dnsmasq named and its captive page"
 fi
 
+# From stage 5 on: TV setup's screens ship whole, in place of the stage 0
+# welcome page, with the daemon's side that keeps their step.
+if [[ -f /usr/share/agentv/daemon/setup.ts ]]; then
+  for file in index.html main.ts setup.css; do
+    [[ -f /usr/share/agentv/setup/$file ]] || fail "TV setup's $file ships"
+  done
+  [[ ! -e /usr/share/agentv/setup/welcome ]] || fail "the stage 0 welcome page is gone"
+  pass "TV setup's screens ship whole, with the daemon's side that keeps their step"
+fi
+
 # From stage 3's NAS shares on (ADR-038): the hand-over to root is enabled,
 # the shares mount at boot, the drop folder lets anyone add a request and
 # only root read one, and the package names cifs-utils for mount.cifs.
