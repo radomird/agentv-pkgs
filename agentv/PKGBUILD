@@ -144,14 +144,14 @@ package() {
   # Where this box's updates come from, read by agentv-pacman-conf, where its
   # apps come from, read by agentv app install, and AgenTV's own address,
   # which every request an app makes names (MET Norway asks for one). The
-  # app index will live in agentv-index (coming soon).
+  # app index is a release of agentv-apps, beside agentv-os (ADR-036).
   printf '%s\n' \
     "AGENTV_VERSION=$pkgver" \
     "AGENTV_HOMEPAGE=${AGENTV_SOURCE%.git}" \
     "AGENTV_CHANNEL=$AGENTV_CHANNEL" \
     "AGENTV_REPO_URL=$AGENTV_REPO_URL" \
     "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" \
-    "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-index/releases/download/index" >"$share/settings"
+    "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-apps/releases/download/index" >"$share/settings"
   chmod 644 "$share/settings"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
