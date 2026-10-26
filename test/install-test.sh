@@ -191,6 +191,25 @@ if [[ -f /usr/bin/agentv-key-store ]]; then
   pass "the provider key's hand-over is enabled, and the move as root waits for a key"
 fi
 
+# From stage 4 on: the setup hotspot opens on first boot only when it's
+# needed, its hand-over to root is enabled, and the package names dnsmasq to
+# hand phones their addresses. agentv went in without its dependencies, so
+# this reads what it depends on from pacman's own record of it.
+if [[ -f /usr/bin/agentv-hotspot ]]; then
+  [[ -L /usr/lib/systemd/system/multi-user.target.wants/agentv-hotspot-boot.service ]] ||
+    fail "the setup hotspot's first-boot check is enabled"
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-hotspot.path ]] ||
+    fail "the setup hotspot's hand-over is enabled"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-hotspot.service" >/dev/null; then
+    fail "the setup hotspot itself only opens when asked"
+  fi
+  sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc" | grep -qx dnsmasq ||
+    fail "the package depends on dnsmasq"
+  [[ -f /usr/share/agentv/companion-web/setup.html && -f /usr/share/agentv/companion-web/setup.ts ]] ||
+    fail "the captive page ships with the daemon"
+  pass "the setup hotspot opens only when it's needed, with dnsmasq named and its captive page"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page.
