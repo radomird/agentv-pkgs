@@ -192,8 +192,9 @@ if [[ -f /usr/bin/agentv-key-store ]]; then
 fi
 
 # From stage 4 on: the setup hotspot opens on first boot only when it's
-# needed, its hand-over to root is enabled, and dnsmasq is there to hand
-# phones their addresses.
+# needed, its hand-over to root is enabled, and the package names dnsmasq to
+# hand phones their addresses. agentv went in without its dependencies, so
+# this reads what it depends on from pacman's own record of it.
 if [[ -f /usr/bin/agentv-hotspot ]]; then
   [[ -L /usr/lib/systemd/system/multi-user.target.wants/agentv-hotspot-boot.service ]] ||
     fail "the setup hotspot's first-boot check is enabled"
@@ -202,10 +203,11 @@ if [[ -f /usr/bin/agentv-hotspot ]]; then
   if compgen -G "/usr/lib/systemd/system/*.wants/agentv-hotspot.service" >/dev/null; then
     fail "the setup hotspot itself only opens when asked"
   fi
-  type -P dnsmasq >/dev/null || fail "dnsmasq comes with the package"
+  sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc" | grep -qx dnsmasq ||
+    fail "the package depends on dnsmasq"
   [[ -f /usr/share/agentv/companion-web/setup.html && -f /usr/share/agentv/companion-web/setup.ts ]] ||
     fail "the captive page ships with the daemon"
-  pass "the setup hotspot opens only when it's needed, with dnsmasq and its captive page"
+  pass "the setup hotspot opens only when it's needed, with dnsmasq named and its captive page"
 fi
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
