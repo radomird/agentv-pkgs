@@ -210,6 +210,26 @@ if [[ -f /usr/bin/agentv-hotspot ]]; then
   pass "the setup hotspot opens only when it's needed, with dnsmasq named and its captive page"
 fi
 
+# From stage 3's NAS shares on (ADR-038): the hand-over to root is enabled,
+# the shares mount at boot, the drop folder lets anyone add a request and
+# only root read one, and the package names cifs-utils for mount.cifs.
+if [[ -f /usr/bin/agentv-share-store ]]; then
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-share.path ]] ||
+    fail "the NAS share hand-over is enabled"
+  [[ -L /usr/lib/systemd/system/multi-user.target.wants/agentv-shares.service ]] ||
+    fail "the NAS shares mount at boot"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-share.service" >/dev/null; then
+    fail "the mount as root only runs when Music leaves a request"
+  fi
+  [[ -f /usr/lib/tmpfiles.d/agentv-shares.conf ]] || fail "the drop folder's tmpfiles entry is in the package"
+  systemd-tmpfiles --create /usr/lib/tmpfiles.d/agentv-shares.conf
+  [[ $(stat -c '%a %U' /var/lib/agentv/share-drop) == "1733 root" ]] ||
+    fail "the drop folder lets anyone add a request and only root read one"
+  sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc" | grep -qx cifs-utils ||
+    fail "the package depends on cifs-utils"
+  pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page.
