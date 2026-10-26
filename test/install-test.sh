@@ -226,6 +226,28 @@ if [[ -f /usr/share/agentv/daemon/setup.ts ]]; then
   pass "TV setup's screens ship whole, with the daemon's side that keeps their step"
 fi
 
+# From setup's apps step on: the hand-over that installs the apps picked is
+# enabled, and the installs as root only run when the daemon leaves some.
+if [[ -f /usr/bin/agentv-setup-apps ]]; then
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-setup-apps.path ]] ||
+    fail "setup's apps hand-over is enabled"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-setup-apps.service" >/dev/null; then
+    fail "the installs as root only run when the daemon leaves the apps picked"
+  fi
+  pass "setup's apps hand-over is enabled, and the installs wait for the apps picked"
+fi
+
+# From setup's look on (S5.2): a theme's colours reach the TV as soon as
+# Omarchy swaps it in, in every session of the owner's.
+if [[ -f /usr/lib/systemd/user/agentv-theme.path ]]; then
+  [[ -L /usr/lib/systemd/user/default.target.wants/agentv-theme.path ]] ||
+    fail "the owner's theme hand-over is on in every session"
+  if compgen -G "/usr/lib/systemd/user/*.wants/agentv-theme.service" >/dev/null; then
+    fail "the theme's hand-over only runs when a theme changes or the TV starts"
+  fi
+  pass "a new theme's colours go to the TV as soon as Omarchy swaps it in"
+fi
+
 # From stage 3's NAS shares on (ADR-038): the hand-over to root is enabled,
 # the shares mount at boot, the drop folder lets anyone add a request and
 # only root read one, and the package names cifs-utils for mount.cifs.
