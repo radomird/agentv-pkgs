@@ -108,8 +108,14 @@ if [[ -f /usr/bin/agentv-app-install ]]; then
     /usr/share/agentv/daemon/apps/cli.ts /usr/bin/agentv-app-list /usr/bin/agentv-app-remove; do
     [[ -f $file ]] || fail "the app installer ships whole: $file is missing"
   done
-  grep -q '^AGENTV_INDEX_URL=https://github.com/.*/agentv-apps/releases/download/index$' /usr/share/agentv/settings ||
-    fail "the package says where the app index lives"
+  # Releases up to v0.1.2 were built before the index moved to agentv-apps
+  # (ADR-036), and a published version keeps its exact file.
+  index=agentv-apps
+  if [[ $version != *.r* ]] && (( $(vercmp "$version" 0.1.2) <= 0 )); then
+    index=agentv-index
+  fi
+  grep -q "^AGENTV_INDEX_URL=https://github.com/.*/$index/releases/download/index\$" /usr/share/agentv/settings ||
+    fail "the package says where the app index lives ($index)"
   [[ -z $(agentv app list) ]] || fail "a new box has no apps installed"
   pass "the app installer ships whole, and knows where the app index lives"
 fi
