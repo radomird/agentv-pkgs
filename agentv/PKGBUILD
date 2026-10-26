@@ -103,8 +103,15 @@ package() {
 
   # The TV session's own units: the screen daemon, the virtual input device
   # and the toasts, under agentv-tv.target, which the session starts itself.
-  for unit in system/user/*.service system/user/*.target; do
-    [[ -f $unit ]] && install -Dm644 "$unit" "$pkgdir/usr/lib/systemd/user/${unit##*/}"
+  # A user unit whose [Install] asks for it, such as agentv-theme.path, is on
+  # in every session of the owner's.
+  for unit in system/user/*.service system/user/*.target system/user/*.path; do
+    [[ -f $unit ]] || continue
+    install -Dm644 "$unit" "$pkgdir/usr/lib/systemd/user/${unit##*/}"
+    target=$(sed -n 's/^WantedBy=//p' "$unit" | head -n 1)
+    [[ -n $target ]] || continue
+    install -d "$pkgdir/usr/lib/systemd/user/$target.wants"
+    ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/user/$target.wants/${unit##*/}"
   done
 
   # udev rules, such as the one that lets the person on the screen make the
