@@ -108,7 +108,7 @@ if [[ -f /usr/bin/agentv-app-install ]]; then
     /usr/share/agentv/daemon/apps/cli.ts /usr/bin/agentv-app-list /usr/bin/agentv-app-remove; do
     [[ -f $file ]] || fail "the app installer ships whole: $file is missing"
   done
-  grep -q '^AGENTV_INDEX_URL=https://github.com/.*/agentv-index/releases/download/index$' /usr/share/agentv/settings ||
+  grep -q '^AGENTV_INDEX_URL=https://github.com/.*/agentv-apps/releases/download/index$' /usr/share/agentv/settings ||
     fail "the package says where the app index lives"
   [[ -z $(agentv app list) ]] || fail "a new box has no apps installed"
   pass "the app installer ships whole, and knows where the app index lives"
