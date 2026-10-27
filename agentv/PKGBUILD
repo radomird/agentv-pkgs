@@ -30,8 +30,12 @@ options=(!debug)
 # doesn't have, through NetworkManager and iptables, which it does.
 # A NAS share with a password is mounted by root with mount.cifs (ADR-038),
 # from cifs-utils, which Omarchy doesn't have either.
-depends=(omarchy agentv-keyring bash chromium cifs-utils curl dnsmasq ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq mpv mpv-mpris
-  networkmanager nodejs pacman-contrib polkit python quickshell udisks2 uwsm)
+# The builder (ADR-011, ADR-044) fetches its provider's CLI with mise, as
+# Omarchy does, adds an app's npm packages with npm and bundles them with
+# esbuild, and runs a package's install script, only with safeguards off,
+# under bubblewrap.
+depends=(omarchy agentv-keyring bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
+  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib polkit python quickshell udisks2 uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -96,6 +100,15 @@ package() {
     [[ -f $file ]] && install -Dm644 "$file" "$share/$file"
   done
 
+  # The builder (ADR-011, ADR-046): its runner, harness, sandbox and
+  # prompts, and the recipes with their templates and tests, however deep.
+  # A commit without it is skipped.
+  if [[ -d builder ]]; then
+    while IFS= read -r -d '' file; do
+      install -Dm644 "$file" "$share/$file"
+    done < <(find builder -type f ! -path '*/node_modules/*' -print0)
+  fi
+
   # The TV session, for the login manager (ADR-031).
   if [[ -f session/agentv.desktop ]]; then
     install -Dm644 session/agentv.desktop "$pkgdir/usr/share/wayland-sessions/agentv.desktop"
@@ -144,6 +157,12 @@ package() {
   # connection. Package-owned, so /etc stays the owner's.
   for conf in system/networkmanager/*.conf; do
     [[ -f $conf ]] && install -Dm644 "$conf" "$pkgdir/usr/lib/NetworkManager/conf.d/${conf##*/}"
+  done
+
+  # sysusers.d entries, such as the builder's own users (ADR-045).
+  # pacman's own hook makes them on install, before the tmpfiles below.
+  for conf in system/sysusers/*.conf; do
+    [[ -f $conf ]] && install -Dm644 "$conf" "$pkgdir/usr/lib/sysusers.d/${conf##*/}"
   done
 
   # tmpfiles.d entries, such as the folder Music leaves its NAS share
