@@ -278,6 +278,16 @@ while IFS= read -r file; do
 done < <(find /usr/share/agentv -name '*.ts' -not -path '*/node_modules/*')
 pass "every module AgenTV's TypeScript imports is in the package"
 
+# From stage 6 on: the builds and the builder's home are mounted nosuid and
+# nodev from boot, so nothing set-user-ID the builder writes counts (ADR-052).
+if [[ -f /usr/lib/systemd/system/agentv-builder@.service ]]; then
+  for mount in var-lib-agentv-build.mount var-lib-agentv-builder.mount; do
+    [[ -L /usr/lib/systemd/system/local-fs.target.wants/$mount ]] || fail "$mount is enabled from boot"
+    grep -qx 'Options=bind,nosuid,nodev' "/usr/lib/systemd/system/$mount" || fail "$mount is nosuid and nodev"
+  done
+  pass "the builds and the builder's home are mounted nosuid and nodev from boot"
+fi
+
 # Every AgenTV file a system unit runs is in the package, so a unit never
 # points at a file an older package had, as the daemon's once pointed at the
 # stage 0 placeholder.
