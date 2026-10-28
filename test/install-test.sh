@@ -270,12 +270,14 @@ fi
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
-# when the daemon starts or the TV draws the page.
+# when the daemon starts or the TV draws the page. A builder recipe's
+# template isn't run from here: the builder copies it into a build's own
+# folder, so its imports are the built app's, not the package's.
 while IFS= read -r file; do
   while IFS= read -r module; do
     [[ -f $(dirname "$file")/$module ]] || fail "${file#/usr/share/agentv/} imports $module, which the package doesn't have"
   done < <(grep -oE "from \"\.\.?/[^\"]+\"" "$file" | sed -E 's/^from "(.*)"$/\1/')
-done < <(find /usr/share/agentv -name '*.ts' -not -path '*/node_modules/*')
+done < <(find /usr/share/agentv -name '*.ts' -not -path '*/node_modules/*' -not -path '/usr/share/agentv/builder/recipes/*/template/*')
 pass "every module AgenTV's TypeScript imports is in the package"
 
 # From stage 6 on: the builds and the builder's home are mounted nosuid and
