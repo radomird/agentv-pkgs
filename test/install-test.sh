@@ -290,6 +290,19 @@ if [[ -f /usr/lib/systemd/system/agentv-builder@.service ]]; then
   pass "the builds and the builder's home are mounted nosuid and nodev from boot"
 fi
 
+# From stage 7 on: the router's two services start with the box, its user
+# is made, and the phrase set agentv selftest S7.4 runs is there.
+if [[ -f /usr/lib/systemd/system/agentv-router.service ]]; then
+  for unit in agentv-router.service agentv-router-cli.service; do
+    [[ -L /usr/lib/systemd/system/multi-user.target.wants/$unit ]] || fail "$unit starts with the box"
+  done
+  [[ -f /usr/lib/sysusers.d/agentv-router.conf ]] || fail "the router's user is in the package"
+  for file in daemon/router-serve.ts daemon/providers/index.ts daemon/executors/index.ts test/agentv/evals/router/phrases.json test/agentv/evals/router/run.mts; do
+    [[ -f /usr/share/agentv/$file ]] || fail "the package has $file"
+  done
+  pass "the router's services start with the box, with their user, and the phrase set is on it"
+fi
+
 # Every AgenTV file a system unit runs is in the package, so a unit never
 # points at a file an older package had, as the daemon's once pointed at the
 # stage 0 placeholder.

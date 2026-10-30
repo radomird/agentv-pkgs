@@ -84,14 +84,17 @@ package() {
     install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
   done
 
-  # First boot, the daemon, the TV session's own Hyprland setup and toasts,
-  # the app contract and the built-in apps, the home screen, the template
-  # that gives it the Omarchy theme's colours, the phone companion's page,
-  # and the TV setup screens with their soundtrack. A folder that isn't in
-  # this commit of agentv-os yet is skipped, so older refs still build, and so
-  # is the stage 0 welcome page, which stage 5's setup screens replace.
+  # First boot, the daemon with the router's providers and executors, the
+  # TV session's own Hyprland setup and toasts, the app contract and the
+  # built-in apps, the home screen, the template that gives it the Omarchy
+  # theme's colours, the phone companion's page, the TV setup screens with
+  # their soundtrack, and the router's phrase set, which agentv selftest
+  # S7.4 runs on the box. A folder that isn't in this commit of agentv-os
+  # yet is skipped, so older refs still build, and so is the stage 0 welcome
+  # page, which stage 5's setup screens replace.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    daemon/apps/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
+    daemon/apps/*.ts daemon/providers/*.ts daemon/executors/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
+    test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     companion-web/*.html companion-web/*.css companion-web/*.ts \
     config/omarchy/themed/*.tpl \
