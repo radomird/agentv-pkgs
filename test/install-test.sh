@@ -268,6 +268,20 @@ if [[ -f /usr/bin/agentv-share-store ]]; then
   pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
 fi
 
+# From stage 8's spoken answers on: the hand-over that fetches Piper as root
+# is enabled, the fetch itself only runs when the daemon asks, and the
+# package names pipewire for pw-play.
+if [[ -f /usr/bin/agentv-voice-fetch ]]; then
+  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-voice.path ]] ||
+    fail "the voice's hand-over is enabled"
+  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-voice.service" >/dev/null; then
+    fail "Piper is only fetched when the daemon asks for it"
+  fi
+  sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc" | grep -qx pipewire ||
+    fail "the package depends on pipewire"
+  pass "the voice's hand-over to root is enabled, Piper waits to be asked for, and pipewire is named"
+fi
+
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows
 # when the daemon starts or the TV draws the page. A builder recipe's
