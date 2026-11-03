@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Builds agentv and agentv-keyring into a signed pacman repository in
+# Builds agentv, agentv-keyring and agentv-voice into a signed pacman repository in
 # <repo-dir>. A package that's already there at the same version is kept as
 # it is, so a box never sees two different files for one version. Runs as
 # root in an Arch container; makepkg runs as a throwaway user.
@@ -27,7 +27,7 @@ arch_container_setup base-devel git jq
 useradd -m builder
 work=/home/builder/work
 mkdir -p "$work"
-cp -r "$ROOT/agentv" "$ROOT/agentv-keyring" "$work/"
+cp -r "$ROOT/agentv" "$ROOT/agentv-keyring" "$ROOT/agentv-voice" "$work/"
 chown -R builder:builder "$work"
 
 as_builder() {
@@ -48,7 +48,7 @@ if [[ $fpr != "$trusted" ]]; then
 fi
 
 current=()
-for pkg in agentv-keyring agentv; do
+for pkg in agentv-keyring agentv-voice agentv; do
   cd "$work/$pkg"
 
   # Fetch the source and run pkgver(), so the package list has the version

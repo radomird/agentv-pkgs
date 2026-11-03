@@ -35,10 +35,9 @@ options=(!debug)
 # esbuild, and runs a package's install script, only with safeguards off,
 # under bubblewrap.
 # The TV says its answers aloud (stage 8) through PipeWire's pw-play, in the
-# TV session. Piper, which says them when the household's provider has no
-# voice of its own, isn't packaged: agentv-voice-fetch brings it, checked
-# against its checksums, the first time it's needed.
-depends=(omarchy agentv-keyring bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
+# TV session, and agentv-voice has Piper and its cori voice, which say them
+# when the household's provider has no voice of its own (Q157).
+depends=(omarchy agentv-keyring agentv-voice bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
   mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell udisks2 uwsm)
 makedepends=(git)
 install=agentv.install

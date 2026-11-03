@@ -268,18 +268,30 @@ if [[ -f /usr/bin/agentv-share-store ]]; then
   pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
 fi
 
-# From stage 8's spoken answers on: the hand-over that fetches Piper as root
-# is enabled, the fetch itself only runs when the daemon asks, and the
-# package names pipewire for pw-play.
-if [[ -f /usr/bin/agentv-voice-fetch ]]; then
-  [[ -L /usr/lib/systemd/system/paths.target.wants/agentv-voice.path ]] ||
-    fail "the voice's hand-over is enabled"
-  if compgen -G "/usr/lib/systemd/system/*.wants/agentv-voice.service" >/dev/null; then
-    fail "Piper is only fetched when the daemon asks for it"
-  fi
-  sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc" | grep -qx pipewire ||
-    fail "the package depends on pipewire"
-  pass "the voice's hand-over to root is enabled, Piper waits to be asked for, and pipewire is named"
+# From stage 8's spoken answers on (Q157): agentv-voice has Piper and its
+# cori voice, root's and readable by anyone, and Piper says a line with the
+# libraries that come with it. An agentv with the voice names agentv-voice
+# and pipewire, for pw-play.
+if pacman -Si agentv-voice >/dev/null 2>&1; then
+  pacman -S --noconfirm --nodeps --nodeps agentv-voice >/dev/null || fail "agentv-voice installs with its signature checked"
+  voice=/usr/lib/agentv-voice
+  [[ $(stat -c '%U %a' "$voice/piper/piper" 2>/dev/null) == "root 755" &&
+    $(stat -c '%U %a' "$voice/en_GB-cori-medium.onnx" 2>/dev/null) == "root 644" &&
+    -f $voice/en_GB-cori-medium.onnx.json ]] ||
+    fail "agentv-voice has Piper and the cori voice, root's and readable by anyone"
+  said=$(mktemp -d)
+  printf '%s\n' "i didn't get that" |
+    LD_LIBRARY_PATH="$voice/piper" "$voice/piper/piper" --model "$voice/en_GB-cori-medium.onnx" --output_file "$said/said.wav" >/dev/null 2>&1 ||
+    fail "Piper says a line with the cori voice"
+  [[ $(head -c 4 "$said/said.wav") == "RIFF" ]] || fail "Piper's line is a WAV"
+  rm -rf "$said"
+  pass "agentv-voice has Piper and the cori voice, root's and readable by anyone, and Piper says a line"
+fi
+if [[ -f /usr/share/agentv/daemon/voice.ts ]]; then
+  depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
+  grep -qx agentv-voice <<<"$depends" || fail "the package depends on agentv-voice"
+  grep -qx pipewire <<<"$depends" || fail "the package depends on pipewire"
+  pass "the package names agentv-voice and pipewire, for the TV's spoken answers"
 fi
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
