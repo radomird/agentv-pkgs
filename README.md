@@ -1,30 +1,32 @@
 # agentv-pkgs
 
-The pacman packages for AgenTV, the world's first open-source agentic TV OS. Powered by [Omarchy](https://omarchy.org).
+The packages your AgenTV box installs and updates from. AgenTV is the world's first open-source agentic TV OS. Powered by [Omarchy](https://omarchy.org).
 
-A box keeps Omarchy's `omarchy` package exactly as Omarchy ships it. AgenTV comes as three packages of its own beside it:
+There's nothing to download here by hand. The ISO puts the packages on a new box, and after that your box keeps itself up to date from here.
 
-- **`agentv`** has everything AgenTV adds: the `agentv` command, its migrations and its hooks into Omarchy's update. Nothing of it goes into `/usr/share/omarchy/`, which belongs to Omarchy.
-- **`agentv-keyring`** has the public key the packages are signed with.
-- **`agentv-voice`** has [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers aloud from its first boot when your AI provider has no voice of its own (coming soon). Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
+## What's in it
 
-That way `agentv update`, which runs `omarchy update` underneath, moves Arch, Omarchy and AgenTV in one go, with one snapshot first.
+Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. AgenTV adds three packages next to it:
 
-## Channels
+- **`agentv`** is everything AgenTV adds: the `agentv` command, its migrations, and its hooks into Omarchy's updates. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
+- **`agentv-keyring`** holds the public key the packages are signed with.
+- **`agentv-voice`** is [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers out loud from its first boot when your AI provider has no voice of its own (coming soon). Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
 
-CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), signs them and publishes a pacman repository as a release here, one per channel:
+That way one `agentv update` (it runs `omarchy update` underneath) updates Arch, Omarchy and AgenTV together, with one snapshot first.
 
-- **stable** has AgenTV's releases. Every box is on it.
-- **edge** has every commit of agentv-os that passes its checks. It's for development.
+## Stable and edge
 
-There's nothing to download by hand. The ISO will put the packages on a new box (coming soon). After that, pacman fetches updates from here.
+CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), signs them, and publishes a pacman repository here as a release, one for each channel:
 
-## How it's built
+- **stable** has AgenTV's releases. Every box starts on it.
+- **edge** has every agentv-os commit that passes its checks. It's for development.
 
-- `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is built once per version of Piper, not with every commit of agentv-os.
-- `.github/workflows/build.yml` looks for a new release tag or a new green commit every hour. It builds in an Arch container, signs, publishes, then installs from the release with pacman, checking every signature on the way.
-- The signing key is a GitHub Actions secret, and it never leaves CI. Its public half is `agentv-keyring/agentv.gpg`.
-- A version that's published keeps its exact file, so a box never sees two different files for one version.
+## For developers
+
+- `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is only rebuilt when Piper's version changes, not with every agentv-os commit.
+- Every hour, `.github/workflows/build.yml` looks for a new release tag or a new green commit. It builds in an Arch container, signs, publishes, and then installs from the release with pacman, checking every signature on the way.
+- The signing key is a GitHub Actions secret and never leaves CI. Its public half is `agentv-keyring/agentv.gpg`.
+- Once a version is published, its file never changes, so your box never sees two different files with the same version.
 
 ## License
 
