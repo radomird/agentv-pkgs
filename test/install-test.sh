@@ -329,6 +329,14 @@ if [[ -f /usr/lib/systemd/system/agentv-router.service ]]; then
   pass "the router's services start with the box, with their user, and the phrase set is on it"
 fi
 
+# From phase 2's Ask box on: make and change start the builder, through an
+# executor of their own and the daemon's routes, which it can't start
+# without.
+if [[ -f /usr/share/agentv/daemon/executors/make.ts ]]; then
+  [[ -f /usr/share/agentv/daemon/routes/ask.ts ]] || fail "the daemon ships with the Ask box's routes"
+  pass "the Ask box's executor ships, with its routes"
+fi
+
 # Every AgenTV file a system unit runs is in the package, so a unit never
 # points at a file an older package had, as the daemon's once pointed at the
 # stage 0 placeholder.
