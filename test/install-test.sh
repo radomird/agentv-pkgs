@@ -155,6 +155,16 @@ if [[ -f /usr/share/agentv/launcher/index.html ]]; then
   pass "the home screen ships whole, with its sounds, their licence and the theme's template"
 fi
 
+# From phase 2's looks on: home's three looks, each with its look.json, and
+# the daemon's routes, which the daemon can't start without.
+if [[ -f /usr/share/agentv/launcher/looks/terminal/look.json ]]; then
+  for look in terminal glass cinema; do
+    [[ -f /usr/share/agentv/launcher/looks/$look/look.json ]] || fail "home's looks ship whole: $look is missing"
+  done
+  [[ -f /usr/share/agentv/daemon/routes/look.ts ]] || fail "the daemon ships with its routes"
+  pass "home's three looks ship, and the daemon's routes with them"
+fi
+
 # From stage 4 on: the daemon serves the phone companion's page, so it ships
 # with the daemon that pairs phones.
 if [[ -f /usr/share/agentv/daemon/phones.ts ]]; then
