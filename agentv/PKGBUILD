@@ -30,6 +30,9 @@ options=(!debug)
 # doesn't have, through NetworkManager and iptables, which it does.
 # A NAS share with a password is mounted by root with mount.cifs (ADR-038),
 # from cifs-utils, which Omarchy doesn't have either.
+# The TV lists the servers and shares on the home network (ADR-067): Avahi,
+# which Omarchy runs, hears shares over mDNS, and smbclient lists a NAS's
+# shares. gvfs-smb brings smbclient today; naming it keeps the list working.
 # The builder (ADR-011, ADR-044) fetches its provider's CLI with mise, as
 # Omarchy does, adds an app's npm packages with npm and bundles them with
 # esbuild, and runs a package's install script, only with safeguards off,
@@ -37,8 +40,8 @@ options=(!debug)
 # The TV says its answers aloud (stage 8) through PipeWire's pw-play, in the
 # TV session, and agentv-voice has Piper and its cori voice, which say them
 # when the household's provider has no voice of its own (Q157).
-depends=(omarchy agentv-keyring agentv-voice bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
-  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell udisks2 uwsm)
+depends=(omarchy agentv-keyring agentv-voice avahi bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
+  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell smbclient udisks2 uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -96,7 +99,7 @@ package() {
   # yet is skipped, so older refs still build, and so is the stage 0 welcome
   # page, which stage 5's setup screens replace.
   for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    daemon/apps/*.ts daemon/providers/*.ts daemon/executors/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
+    daemon/apps/*.ts daemon/providers/*.ts daemon/executors/*.ts daemon/routes/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     companion-web/*.html companion-web/*.css companion-web/*.ts \
