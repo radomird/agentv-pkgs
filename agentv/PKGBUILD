@@ -40,8 +40,11 @@ options=(!debug)
 # The TV says its answers aloud (stage 8) through PipeWire's pw-play, in the
 # TV session, and agentv-voice has Piper and its cori voice, which say them
 # when the household's provider has no voice of its own (Q157).
-depends=(omarchy agentv-keyring agentv-voice avahi bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
-  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell smbclient udisks2 uwsm)
+# The box check names the GPU from hwdata's pci.ids, asks libva-utils'
+# vainfo which video it decodes in hardware, and vulkan-tools' vulkaninfo
+# whether it's integrated or discrete.
+depends=(omarchy agentv-keyring agentv-voice avahi bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hwdata hyprland iptables jq
+  libva-utils mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell smbclient udisks2 uwsm vulkan-tools)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
