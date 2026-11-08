@@ -329,6 +329,17 @@ if [[ -f /usr/lib/systemd/system/agentv-router.service ]]; then
   pass "the router's services start with the box, with their user, and the phrase set is on it"
 fi
 
+# From phase 2's track 2 on: the boot splash stays up until the TV takes
+# over, through a drop-in for Plymouth's own quit, and the TV session draws
+# the same splash until home is drawn.
+if [[ -f /usr/bin/agentv-boot-splash ]]; then
+  dropin=/usr/lib/systemd/system/plymouth-quit.service.d/agentv.conf
+  [[ -f $dropin ]] || fail "Plymouth's drop-in is in the package"
+  grep -qx 'ExecStart=-/usr/bin/agentv-boot-splash quit' "$dropin" || fail "Plymouth quits through agentv-boot-splash"
+  [[ -f /usr/share/agentv/session/splash/shell.qml ]] || fail "the TV session's splash is in the package"
+  pass "the boot splash's drop-in for Plymouth and the TV session's splash ship"
+fi
+
 # Every AgenTV file a system unit runs is in the package, so a unit never
 # points at a file an older package had, as the daemon's once pointed at the
 # stage 0 placeholder.

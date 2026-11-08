@@ -90,16 +90,17 @@ package() {
     install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
   done
 
-  # First boot, the daemon with the router's providers and executors, the
-  # TV session's own Hyprland setup and toasts, the app contract and the
-  # built-in apps, the home screen, the template that gives it the Omarchy
+  # First boot, the daemon with every folder of its own (the router's
+  # providers and executors, its routes and so on), the
+  # TV session's own Hyprland setup, toasts and splash, the app contract and
+  # the built-in apps, the home screen, the template that gives it the Omarchy
   # theme's colours, the phone companion's page, the TV setup screens with
   # their soundtrack, and the router's phrase set, which agentv selftest
   # S7.4 runs on the box. A folder that isn't in this commit of agentv-os
   # yet is skipped, so older refs still build, and so is the stage 0 welcome
   # page, which stage 5's setup screens replace.
-  for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    daemon/apps/*.ts daemon/providers/*.ts daemon/executors/*.ts daemon/routes/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
+  for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml session/splash/*.qml \
+    daemon/*/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     companion-web/*.html companion-web/*.css companion-web/*.ts \
@@ -157,6 +158,12 @@ package() {
     ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/system/$target.wants/${unit##*/}"
   done
 
+  # Drop-ins for units that aren't AgenTV's, such as the one that keeps
+  # Plymouth's splash up until the TV session takes over from it (ADR-060).
+  for conf in system/*.service.d/*.conf; do
+    [[ -f $conf ]] && install -Dm644 "$conf" "$pkgdir/usr/lib/systemd/system/${conf#system/}"
+  done
+
   # polkit rules, such as the one that lets the person at the TV check for
   # updates and install them.
   for rule in system/polkit/*.rules; do
@@ -199,6 +206,19 @@ package() {
     "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" \
     "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-apps/releases/download/index" >"$share/settings"
   chmod 644 "$share/settings"
+
+  # Every file the daemon imports is in the package. One that's missing
+  # stops the daemon on the box, so it stops the build here instead.
+  local from target missing=0
+  while IFS= read -r -d '' from; do
+    while IFS= read -r target; do
+      if [[ ! -f $(dirname "$from")/$target ]]; then
+        echo "${from#"$share"/} imports $target, which isn't in the package" >&2
+        missing=1
+      fi
+    done < <(grep -oE 'from "\.\.?/[^"]+\.ts"' "$from" | sed -E 's/^from "//; s/"$//')
+  done < <(find "$share/daemon" -name '*.ts' -print0)
+  (( missing == 0 )) || return 1
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   # The home screen's sounds aren't MIT: they ship only with AgenTV.
