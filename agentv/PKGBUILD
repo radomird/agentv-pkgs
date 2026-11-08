@@ -30,6 +30,9 @@ options=(!debug)
 # doesn't have, through NetworkManager and iptables, which it does.
 # A NAS share with a password is mounted by root with mount.cifs (ADR-038),
 # from cifs-utils, which Omarchy doesn't have either.
+# The TV lists the servers and shares on the home network (ADR-067): Avahi,
+# which Omarchy runs, hears shares over mDNS, and smbclient lists a NAS's
+# shares. gvfs-smb brings smbclient today; naming it keeps the list working.
 # The builder (ADR-011, ADR-044) fetches its provider's CLI with mise, as
 # Omarchy does, adds an app's npm packages with npm and bundles them with
 # esbuild, and runs a package's install script, only with safeguards off,
@@ -37,8 +40,8 @@ options=(!debug)
 # The TV says its answers aloud (stage 8) through PipeWire's pw-play, in the
 # TV session, and agentv-voice has Piper and its cori voice, which say them
 # when the household's provider has no voice of its own (Q157).
-depends=(omarchy agentv-keyring agentv-voice bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
-  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell udisks2 uwsm)
+depends=(omarchy agentv-keyring agentv-voice avahi bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hyprland iptables jq
+  mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell smbclient udisks2 uwsm)
 makedepends=(git)
 install=agentv.install
 source=("agentv-os::git+${AGENTV_SOURCE:?set AGENTV_SOURCE}#${AGENTV_REF:?set AGENTV_REF}")
@@ -87,17 +90,18 @@ package() {
     install -Dm644 "$file" "$pkgdir/etc/skel/.$file"
   done
 
-  # First boot, the daemon with the router's providers, executors and
-  # routes, the TV session's own Hyprland setup and toasts, the app contract
-  # and the built-in apps, the home screen with its looks and their fonts,
-  # the template that gives it the Omarchy
+  # First boot, the daemon with every folder of its own (the router's
+  # providers and executors, its routes and so on), the
+  # TV session's own Hyprland setup, toasts and splash, the app contract and
+  # the built-in apps, the home screen with its looks and their fonts, the
+  # template that gives it the Omarchy
   # theme's colours, the phone companion's page, the TV setup screens with
   # their soundtrack, and the router's phrase set, which agentv selftest
   # S7.4 runs on the box. A folder that isn't in this commit of agentv-os
   # yet is skipped, so older refs still build, and so is the stage 0 welcome
   # page, which stage 5's setup screens replace.
-  for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml \
-    daemon/apps/*.ts daemon/providers/*.ts daemon/executors/*.ts daemon/routes/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
+  for file in install/tv/*.sh daemon/*.py daemon/*.ts daemon/package.json session/*.lua session/toast/*.qml session/splash/*.qml \
+    daemon/*/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     launcher/looks/*/* launcher/fonts/*.woff2 \
@@ -156,6 +160,12 @@ package() {
     ln -s "../${unit##*/}" "$pkgdir/usr/lib/systemd/system/$target.wants/${unit##*/}"
   done
 
+  # Drop-ins for units that aren't AgenTV's, such as the one that keeps
+  # Plymouth's splash up until the TV session takes over from it (ADR-060).
+  for conf in system/*.service.d/*.conf; do
+    [[ -f $conf ]] && install -Dm644 "$conf" "$pkgdir/usr/lib/systemd/system/${conf#system/}"
+  done
+
   # polkit rules, such as the one that lets the person at the TV check for
   # updates and install them.
   for rule in system/polkit/*.rules; do
@@ -198,6 +208,19 @@ package() {
     "AGENTV_TESTED_URL=${AGENTV_SOURCE%.git}/releases/download/tested" \
     "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-apps/releases/download/index" >"$share/settings"
   chmod 644 "$share/settings"
+
+  # Every file the daemon imports is in the package. One that's missing
+  # stops the daemon on the box, so it stops the build here instead.
+  local from target missing=0
+  while IFS= read -r -d '' from; do
+    while IFS= read -r target; do
+      if [[ ! -f $(dirname "$from")/$target ]]; then
+        echo "${from#"$share"/} imports $target, which isn't in the package" >&2
+        missing=1
+      fi
+    done < <(grep -oE 'from "\.\.?/[^"]+\.ts"' "$from" | sed -E 's/^from "//; s/"$//')
+  done < <(find "$share/daemon" -name '*.ts' -print0)
+  (( missing == 0 )) || return 1
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   # The home screen's sounds aren't MIT: they ship only with AgenTV.
