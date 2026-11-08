@@ -104,7 +104,7 @@ package() {
     daemon/*/*.ts apps/package.json apps/contract/*.ts apps/builtin/*/* \
     test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
-    launcher/looks/*/* launcher/fonts/*.woff2 \
+    launcher/looks/*.ts launcher/looks/*/* launcher/fonts/*.woff2 \
     companion-web/*.html companion-web/*.css companion-web/*.ts \
     config/omarchy/themed/*.tpl \
     setup/welcome/* setup/*.html setup/*.css setup/*.ts setup/audio/* \
@@ -209,9 +209,14 @@ package() {
     "AGENTV_INDEX_URL=${AGENTV_SOURCE%/agentv-os.git}/agentv-apps/releases/download/index" >"$share/settings"
   chmod 644 "$share/settings"
 
-  # Every file the daemon imports is in the package. One that's missing
-  # stops the daemon on the box, so it stops the build here instead.
-  local from target missing=0
+  # Every file the daemon imports is in the package, and so is every file the
+  # TV's pages import (home, setup and the phone's page). One that's missing
+  # stops the daemon on the box, or leaves the TV on a blank page, so it
+  # stops the build here instead.
+  local from target missing=0 folder folders=()
+  for folder in daemon launcher setup companion-web; do
+    [[ -d $share/$folder ]] && folders+=("$share/$folder")
+  done
   while IFS= read -r -d '' from; do
     while IFS= read -r target; do
       if [[ ! -f $(dirname "$from")/$target ]]; then
@@ -219,7 +224,7 @@ package() {
         missing=1
       fi
     done < <(grep -oE 'from "\.\.?/[^"]+\.ts"' "$from" | sed -E 's/^from "//; s/"$//')
-  done < <(find "$share/daemon" -name '*.ts' -print0)
+  done < <(find "${folders[@]}" -name '*.ts' -print0)
   (( missing == 0 )) || return 1
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
