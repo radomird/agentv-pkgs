@@ -1,0 +1,55 @@
+name: An update went wrong
+description: Tell me what happened when your box updated or installed a package
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for telling me. Please leave out keys, passwords and anything from your own accounts.
+
+        Found a security problem? Don't write it here. [Tell me privately](https://github.com/radomird/agentv-pkgs/security/advisories/new) instead.
+
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+      description: What you did, and what the TV or the terminal said. Paste the error if there was one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+
+  - type: input
+    id: release
+    attributes:
+      label: AgenTV release
+      description: It's in _Settings > About_ on the TV. Or run `agentv version` on the box.
+      placeholder: e.g. 0.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: channel
+    attributes:
+      label: Channel
+      description: "`agentv version` prints it after the release."
+      options:
+        - stable
+        - edge
+        - I don't know
+    validations:
+      required: false
+
+  - type: input
+    id: box
+    attributes:
+      label: Box
+      description: The make and model.
+      placeholder: e.g. Intel NUC8i5BEH
+    validations:
+      required: true
