@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: A security problem
+    url: https://github.com/radomird/agentv-pkgs/security/advisories/new
+    about: Please tell me privately first, not in a public issue.

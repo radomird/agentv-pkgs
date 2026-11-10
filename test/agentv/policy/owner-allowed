@@ -3,3 +3,9 @@
 # its update address written in when CI builds it. Moving the repos to an
 # organisation then changes no code (HANDOFF.md, "No GitHub owner in code").
 # Markdown is never scanned for it, so READMEs can link the repos.
+
+# GitHub's issue chooser and forms need whole addresses for the private
+# security report and the other repos, so these name the owner. A move to an
+# organisation changes them by hand.
+.github/ISSUE_TEMPLATE/bug.yml
+.github/ISSUE_TEMPLATE/config.yml
