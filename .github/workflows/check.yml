@@ -45,6 +45,12 @@ jobs:
       - name: The gate catches what it should
         run: test/agentv/policy/check-test.sh --ci
 
+      # How packages get signed, on a stand-in repository: a release only
+      # with AgenTV's key, a test run only with its throwaway one, and the
+      # key given to the signing job alone.
+      - name: The signing scripts sign what they should, and nothing else
+        run: test/sign-test.sh
+
       # makepkg reads the PKGBUILDs as bash; check that they parse and that
       # the keyring's checksums match its files.
       - name: The PKGBUILDs parse

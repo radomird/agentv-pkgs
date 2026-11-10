@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# Signs the repository bin/build left in <repo-dir>: every package that has
+# no signature yet, the package database, the files database and
+# release.json. Then it checks every signature in there, the kept packages'
+# too, against the one key it signed with.
+#
+# It needs gpg and nothing else, and it fetches nothing, so it runs on its
+# own, away from the build. The key comes in AGENTV_SIGNING_KEY (the armored
+# secret key), goes into a keyring made for this run, and is out of the
+# environment before anything else happens. The keyring is gone when this
+# ends.
+#
+# The key has to be the one agentv-keyring trusts. With AGENTV_TEST_KEY, the
+# public half of a throwaway key (bin/test-key), it has to be that key
+# instead, and never AgenTV's own: that's a pull request's or a branch's
+# test run.
+#
+# Usage: bin/sign <repo-dir>
+# Needs: AGENTV_SIGNING_KEY
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repo=$(realpath "${1:?usage: bin/sign <repo-dir>}")
+
+if [[ -z ${AGENTV_SIGNING_KEY:-} ]]; then
+  echo "::error::AGENTV_SIGNING_KEY is empty. Packages are only ever published signed." >&2
+  exit 1
+fi
+if [[ -n ${AGENTV_TEST_KEY:-} && ! -f $AGENTV_TEST_KEY ]]; then
+  echo "::error::AGENTV_TEST_KEY names a throwaway key's public half, and $AGENTV_TEST_KEY isn't a file" >&2
+  exit 1
+fi
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+export GNUPGHOME="$work/gnupg"
+mkdir -m 700 "$GNUPGHOME"
+
+# In, and straight out of the environment: nothing this script starts after
+# the import inherits the key.
+key=$AGENTV_SIGNING_KEY
+unset AGENTV_SIGNING_KEY
+printf '%s\n' "$key" | gpg --batch --quiet --import
+unset key
+
+mapfile -t secret < <(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "sec" { want = 1 } want && $1 == "fpr" { print $10; want = 0 }')
+if (( ${#secret[@]} != 1 )); then
+  echo "::error::AGENTV_SIGNING_KEY holds ${#secret[@]} keys. It signs with exactly one." >&2
+  exit 1
+fi
+fpr=${secret[0]}
+
+fingerprint_of() {
+  gpg --batch --with-colons --show-keys "$1" | awk -F: '$1 == "pub" { want = 1 } want && $1 == "fpr" { print $10; exit }'
+}
+
+release=$(cut -d: -f1 "$ROOT/agentv-keyring/agentv-trusted" | head -n 1)
+if [[ -n ${AGENTV_TEST_KEY:-} ]]; then
+  expected=$(fingerprint_of "$AGENTV_TEST_KEY")
+  if [[ $fpr == "$release" ]]; then
+    echo "::error::a test run signs with its throwaway key, never with AgenTV's own" >&2
+    exit 1
+  fi
+  if [[ $fpr != "$expected" ]]; then
+    echo "::error::the signing key ($fpr) isn't this run's throwaway key ($expected)" >&2
+    exit 1
+  fi
+  echo "Signing with this run's throwaway key, $fpr. Nothing signed with it is published."
+elif [[ $fpr != "$release" ]]; then
+  echo "::error::the signing key ($fpr) isn't the one agentv-keyring trusts ($release)" >&2
+  exit 1
+fi
+
+# gpgv takes a signature only from a key in the keyring it's given, and this
+# one holds the signing key alone.
+gpg --batch --export "$fpr" >"$work/signer.gpg"
+
+sign() {
+  gpg --batch --yes --quiet --local-user "$fpr" --detach-sign --output "$1.sig" "$1"
+}
+
+verify() {
+  if ! gpgv --quiet --keyring "$work/signer.gpg" "$1.sig" "$1" 2>"$work/gpgv.log"; then
+    cat "$work/gpgv.log" >&2
+    echo "::error::$1 isn't signed by $fpr" >&2
+    exit 1
+  fi
+}
+
+cd "$repo"
+
+shopt -s nullglob
+packages=(*.pkg.tar.zst)
+shopt -u nullglob
+(( ${#packages[@]} > 0 )) || { echo "::error::no packages in $repo to sign" >&2; exit 1; }
+for file in agentv.db.tar.gz agentv.files.tar.gz release.json; do
+  [[ -f $file ]] || { echo "::error::$repo has no $file. Run bin/build first." >&2; exit 1; }
+done
+
+for package in "${packages[@]}"; do
+  if [[ -f $package.sig ]]; then
+    echo "Keeping $package.sig, already published"
+  else
+    sign "$package"
+    echo "Signed $package"
+  fi
+  verify "$package"
+done
+
+# These are made again by every build, so their signatures are too.
+for file in agentv.db.tar.gz agentv.files.tar.gz release.json; do
+  sign "$file"
+  verify "$file"
+done
+
+# GitHub release assets can't be symlinks, so pacman's names are copies
+# (bin/build), and so are their signatures.
+for db in agentv.db agentv.files; do
+  cmp -s "$db" "$db.tar.gz" || cp "$db.tar.gz" "$db"
+  cp "$db.tar.gz.sig" "$db.sig"
+done
+
+echo "Signed by $fpr:"
+ls -l "$repo"

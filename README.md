@@ -25,7 +25,8 @@ CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), 
 
 - `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is only rebuilt when Piper's version changes, not with every agentv-os commit.
 - Every hour, `.github/workflows/build.yml` looks for a new release tag or a new green commit. It builds in an Arch container, signs, publishes, and then installs from the release with pacman, checking every signature on the way.
-- The signing key is a GitHub Actions secret and never leaves CI. Its public half is `agentv-keyring/agentv.gpg`.
+- The signing key is a GitHub Actions secret and never leaves CI. Only the job that signs gets it, and that job builds nothing: it takes the built files, checks them and runs `bin/sign`. Its public half is `agentv-keyring/agentv.gpg`.
+- A pull request's test run never gets that key. It signs its packages with a throwaway key made for the run (`bin/test-key`), which only the run's own test box trusts.
 - Once a version is published, its file never changes, so your box never sees two different files with the same version.
 
 ## License
