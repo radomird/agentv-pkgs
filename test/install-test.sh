@@ -281,31 +281,19 @@ if [[ -f /usr/bin/agentv-share-store ]]; then
   pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
 fi
 
-# From stage 8's spoken answers on (Q157): agentv-voice has Piper and its
-# cori voice, root's and readable by anyone, and Piper says a line with the
-# libraries that come with it. An agentv with the voice names agentv-voice
-# and pipewire, for pw-play.
+# The TV has no voice of its own: the repository has no agentv-voice, and
+# agentv doesn't ask for one. It still names pipewire, for pw-play, which
+# plays an AI's own voice where a key has one.
 if pacman -Si agentv-voice >/dev/null 2>&1; then
-  pacman -S --noconfirm --nodeps --nodeps agentv-voice >/dev/null || fail "agentv-voice installs with its signature checked"
-  voice=/usr/lib/agentv-voice
-  [[ $(stat -c '%U %a' "$voice/piper/piper" 2>/dev/null) == "root 755" &&
-    $(stat -c '%U %a' "$voice/en_GB-cori-medium.onnx" 2>/dev/null) == "root 644" &&
-    -f $voice/en_GB-cori-medium.onnx.json ]] ||
-    fail "agentv-voice has Piper and the cori voice, root's and readable by anyone"
-  said=$(mktemp -d)
-  printf '%s\n' "i didn't get that" |
-    LD_LIBRARY_PATH="$voice/piper" "$voice/piper/piper" --model "$voice/en_GB-cori-medium.onnx" --output_file "$said/said.wav" >/dev/null 2>&1 ||
-    fail "Piper says a line with the cori voice"
-  [[ $(head -c 4 "$said/said.wav") == "RIFF" ]] || fail "Piper's line is a WAV"
-  rm -rf "$said"
-  pass "agentv-voice has Piper and the cori voice, root's and readable by anyone, and Piper says a line"
+  fail "the repository has no agentv-voice"
 fi
-if [[ -f /usr/share/agentv/daemon/voice.ts ]]; then
-  depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
-  grep -qx agentv-voice <<<"$depends" || fail "the package depends on agentv-voice"
-  grep -qx pipewire <<<"$depends" || fail "the package depends on pipewire"
-  pass "the package names agentv-voice and pipewire, for the TV's spoken answers"
+depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
+if grep -qx agentv-voice <<<"$depends"; then
+  fail "the package doesn't depend on agentv-voice"
 fi
+grep -qx pipewire <<<"$depends" || fail "the package depends on pipewire"
+[[ ! -e /usr/lib/agentv-voice ]] || fail "nothing of a voice is on the box"
+pass "there's no agentv-voice: agentv installs without it, and still names pipewire"
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows

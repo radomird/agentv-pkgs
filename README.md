@@ -6,11 +6,10 @@ There's nothing to download here by hand. The ISO puts the packages on a new box
 
 ## What's in it
 
-Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. AgenTV adds three packages next to it:
+Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. AgenTV adds two packages next to it:
 
 - **`agentv`** is everything AgenTV adds: the `agentv` command, its migrations, and its hooks into Omarchy's updates. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
 - **`agentv-keyring`** holds the public key the packages are signed with.
-- **`agentv-voice`** is [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers out loud from its first boot when your AI provider has no voice of its own. Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
 
 That way one `agentv update` (it runs `omarchy update` underneath) updates Arch, Omarchy and AgenTV together, with one snapshot first.
 
@@ -23,7 +22,7 @@ CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), 
 
 ## For developers
 
-- `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is only rebuilt when Piper's version changes, not with every agentv-os commit.
+- `agentv/PKGBUILD` and `agentv-keyring/PKGBUILD` are the recipes.
 - Every hour, `.github/workflows/build.yml` looks for a new release tag or a new green commit. It builds in an Arch container, signs, publishes, and then installs from the release with pacman, checking every signature on the way.
 - The signing key is a GitHub Actions secret and never leaves CI. Only the job that signs gets it, and that job builds nothing: it takes the built files, checks them and runs `bin/sign`. Its public half is `agentv-keyring/agentv.gpg`.
 - A pull request's test run never gets that key. It signs its packages with a throwaway key made for the run (`bin/test-key`), which only the run's own test box trusts.
