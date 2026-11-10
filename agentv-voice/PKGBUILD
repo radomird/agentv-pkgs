@@ -1,50 +1,113 @@
-# The TV's own voice (stage 8, Q157): Piper and its cori voice, which say
-# the TV's answers aloud when the household's AI provider has no voice of
-# its own (Claude, Muse, a plan), and whenever that voice doesn't answer.
-# It's a package of its own beside agentv, so the TV can speak from its
-# first boot without fetching anything, and so it's built once per version
-# rather than with every agentv commit.
+# The TV's own voice (ADR-087): Kokoro, a small speech model that sounds
+# like a person, run by sherpa-onnx. It says the TV's answers aloud when the
+# household's AI has no voice of its own (Claude, Muse, a plan), and whenever
+# that voice doesn't answer. It's a package of its own beside agentv, so the
+# TV can speak from its first boot without fetching anything, and so it's
+# built once per version rather than with every agentv commit.
 #
-# Piper's last MIT release, built for x86_64 by its authors, with the
-# libraries it needs beside it (onnxruntime, MIT; espeak-ng, GPL-3.0 or
-# later), and the cori voice: British English, trained on LibriVox
-# recordings, which are public domain. Each file is checked against its
-# checksum below. agentv's daemon runs piper from /usr/lib/agentv-voice.
+# What's in it, and whose it is:
+# - sherpa-onnx's speech program, as its authors build it for x86_64, in one
+#   file with onnxruntime inside (sherpa-onnx: Apache-2.0; onnxruntime: MIT).
+#   From 2.0.0 on it carries no espeak-ng, so nothing GPL is in the package.
+# - Kokoro-82M v1.0, as an 8-bit ONNX file, with its list of words and their
+#   sounds (Apache-2.0, by hexgrad; the lists are from its misaki project).
+# - Only the voices named in _voices. The bundle's voice file holds all 54,
+#   and one of them is the author's copy of a voice OpenAI withdrew, so the
+#   package's file keeps the named ones and leaves the rest empty.
+# - say, the program AgenTV's daemon runs: a line in, a WAV file out.
+#
+# A word the list doesn't have, such as a show's name, gets its sounds from
+# espeak-ng (GPL-3.0-or-later), which is Arch's own package and a separate
+# program say asks. It isn't redistributed here.
+#
+# Each file is checked against its checksum below. The model's bundle has no
+# version in its address, so a new upload there fails the build until the
+# checksum is read again.
 pkgname=agentv-voice
-pkgver=2023.11.14.2
+# Piper's package counted by Piper's date, which is a bigger number.
+epoch=1
+pkgver=1.0
 pkgrel=1
-pkgdesc="Piper and its cori voice, for AgenTV's spoken answers"
+pkgdesc="The TV's own voice for AgenTV's spoken answers: Kokoro, run by sherpa-onnx"
 arch=(x86_64)
-url="https://github.com/rhasspy/piper"
-license=(MIT GPL-3.0-or-later LicenseRef-public-domain)
-# Prebuilt by Piper's authors: nothing to strip, and no debug package.
+url="https://huggingface.co/hexgrad/Kokoro-82M"
+license=(Apache-2.0 MIT)
+depends=(bash coreutils espeak-ng glibc grep sed)
+# Built by sherpa-onnx's authors: nothing to strip, and no debug package.
 options=(!strip !debug)
-_release=2023.11.14-2
-_voice=en_GB-cori-medium
-_voices=https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/cori/medium
-source=("piper-$_release.tar.gz::https://github.com/rhasspy/piper/releases/download/$_release/piper_linux_x86_64.tar.gz"
-  "piper-$_release-LICENSE.md::https://raw.githubusercontent.com/rhasspy/piper/$_release/LICENSE.md"
-  "$_voice.onnx::$_voices/$_voice.onnx"
-  "$_voice.onnx.json::$_voices/$_voice.onnx.json"
-  "$_voice-MODEL_CARD::$_voices/MODEL_CARD")
-noextract=("$_voice.onnx")
-sha256sums=(a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992
-  4cd71dece7037f1d6d93cce7570c57ab75ea9ac566fd4990be2f3ab08d15b47f
-  1899f98e5fb8310154f3c2973f4b8a929ba7245e722b3d3a85680b833d95f10d
-  e262c16d7f192f69d4edd6b4ef8a5915379e67495fcc402f1ab15eeb33da3d36
-  38d76dfde845837b184668f8bab1c6426ad740b1af0fcebc349037822739e536)
+_sherpa=2.0.1
+_model=kokoro-int8-multi-lang-v1_0
+# The voice the TV speaks with, and every voice in the package. Each has its
+# place in the bundle's voice file, and the accent its words are read in.
+_voice=af_heart
+_voices=("af_heart 3 us" "af_bella 2 us" "am_michael 16 us" "bf_emma 21 gb")
+source=("sherpa-onnx-$_sherpa.tar.bz2::https://github.com/k2-fsa/sherpa-onnx/releases/download/v$_sherpa/sherpa-onnx-v$_sherpa-linux-x64-static.tar.bz2"
+  "$_model.tar.bz2::https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$_model.tar.bz2"
+  "sherpa-onnx-$_sherpa-LICENSE::https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/v$_sherpa/LICENSE"
+  "onnxruntime-LICENSE::https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/LICENSE"
+  say)
+# The speech program's archive holds forty programs of its size, and the
+# bundle holds what the package leaves out: only what's used is unpacked.
+noextract=("sherpa-onnx-$_sherpa.tar.bz2" "$_model.tar.bz2")
+sha256sums=(8b34cf773b65e4be3e7ace12fb6a65fcd8f4e8fe06516ae9b7bcaf405dcb308c
+  72c347230107ef8a31098ec4d468a605244beef5f1ed00db97efa13518800653
+  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+  2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c
+  c1441a32dd163f78137b291b87aa5e2e8de3599c353296eea98c75e44c87218e)
 
 package() {
-  local dir="$pkgdir/usr/lib/agentv-voice"
-  install -d "$dir"
-  # Piper's folder as its release has it: piper beside its libraries and
-  # espeak-ng's data, which it finds there. -R keeps its symlinks, and the
-  # copies are root's, not the build user's.
-  cp -R piper "$dir/"
-  chmod -R u=rwX,go=rX "$dir/piper"
-  chmod 755 "$dir/piper/piper"
-  install -Dm644 "$_voice.onnx" "$dir/$_voice.onnx"
-  install -Dm644 "$_voice.onnx.json" "$dir/$_voice.onnx.json"
-  install -Dm644 "piper-$_release-LICENSE.md" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-piper.md"
-  install -Dm644 "$_voice-MODEL_CARD" "$pkgdir/usr/share/licenses/$pkgname/MODEL_CARD-$_voice"
+  local dir="$pkgdir/usr/lib/agentv-voice" sherpa="sherpa-onnx-v$_sherpa-linux-x64-static"
+  local one=$(( 510 * 256 * 4 )) all=54 voice name sid accent
+
+  bsdtar -xf "sherpa-onnx-$_sherpa.tar.bz2" "$sherpa/bin/sherpa-onnx-offline-tts"
+  bsdtar -xf "$_model.tar.bz2" "$_model/model.int8.onnx" "$_model/voices.bin" "$_model/tokens.txt" \
+    "$_model/lexicon-us-en.txt" "$_model/lexicon-gb-en.txt" "$_model/LICENSE"
+
+  install -Dm755 "$sherpa/bin/sherpa-onnx-offline-tts" "$dir/sherpa-onnx-offline-tts"
+  install -Dm644 "$_model/model.int8.onnx" "$dir/kokoro/model.onnx"
+  install -Dm644 "$_model/tokens.txt" "$dir/kokoro/tokens.txt"
+  install -Dm644 "$_model/lexicon-us-en.txt" "$dir/kokoro/lexicon-us-en.txt"
+  install -Dm644 "$_model/lexicon-gb-en.txt" "$dir/kokoro/lexicon-gb-en.txt"
+
+  # The bundle's voice file is every voice, one after another, each the same
+  # size. The package's has the same places, with only the named voices in
+  # theirs.
+  (( $(stat -c %s "$_model/voices.bin") == one * all )) || {
+    echo "the bundle's voices.bin isn't $all voices of $one bytes" >&2
+    return 1
+  }
+  truncate -s $(( one * all )) "$dir/kokoro/voices.bin"
+  : >"$dir/voices"
+  for voice in "${_voices[@]}"; do
+    read -r name sid accent <<<"$voice"
+    dd if="$_model/voices.bin" of="$dir/kokoro/voices.bin" bs="$one" skip="$sid" seek="$sid" count=1 conv=notrunc status=none
+    printf '%s\n' "$voice" >>"$dir/voices"
+  done
+  chmod 644 "$dir/kokoro/voices.bin" "$dir/voices"
+  grep -q "^$_voice " "$dir/voices" || {
+    echo "$_voice isn't one of the package's voices" >&2
+    return 1
+  }
+  printf '%s\n' "$_voice" >"$dir/voice"
+  chmod 644 "$dir/voice"
+
+  install -Dm755 say "$dir/say"
+
+  install -Dm644 "sherpa-onnx-$_sherpa-LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-sherpa-onnx"
+  install -Dm644 onnxruntime-LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE-onnxruntime"
+  install -Dm644 "$_model/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-kokoro"
+  cat >"$pkgdir/usr/share/licenses/$pkgname/NOTICE" <<NOTICE
+agentv-voice is built from:
+
+- sherpa-onnx $_sherpa, Apache-2.0, https://github.com/k2-fsa/sherpa-onnx
+  Its speech program has onnxruntime inside, MIT,
+  https://github.com/microsoft/onnxruntime
+- Kokoro-82M v1.0 by hexgrad, Apache-2.0,
+  https://huggingface.co/hexgrad/Kokoro-82M, as the 8-bit ONNX file and word
+  lists in sherpa-onnx's $_model bundle. The word lists come from misaki,
+  Apache-2.0, https://github.com/hexgrad/misaki
+- The voices ${_voices[*]%% *} from that model, and no others.
+
+The voice is made by a computer. It isn't a recording of a person.
+NOTICE
 }

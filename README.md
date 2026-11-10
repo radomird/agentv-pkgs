@@ -10,7 +10,7 @@ Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. Agen
 
 - **`agentv`** is everything AgenTV adds: the `agentv` command, its migrations, and its hooks into Omarchy's updates. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
 - **`agentv-keyring`** holds the public key the packages are signed with.
-- **`agentv-voice`** is [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers out loud from its first boot when your AI provider has no voice of its own. Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
+- **`agentv-voice`** is the TV's own voice, so it can say its answers out loud from its first boot when your AI has no voice of its own. It's [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), a small speech model, run by [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Both are Apache-2.0, and the onnxruntime inside sherpa-onnx is MIT. For a name the model's word list doesn't have, it asks Arch's own `espeak-ng` how it sounds. That's a separate program, and it isn't in this package.
 
 That way one `agentv update` (it runs `omarchy update` underneath) updates Arch, Omarchy and AgenTV together, with one snapshot first.
 
@@ -23,7 +23,7 @@ CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), 
 
 ## For developers
 
-- `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is only rebuilt when Piper's version changes, not with every agentv-os commit.
+- `agentv/PKGBUILD`, `agentv-keyring/PKGBUILD` and `agentv-voice/PKGBUILD` are the recipes. `agentv-voice` is only rebuilt when its own recipe changes, not with every agentv-os commit.
 - Every hour, `.github/workflows/build.yml` looks for a new release tag or a new green commit. It builds in an Arch container, signs, publishes, and then installs from the release with pacman, checking every signature on the way.
 - The signing key is a GitHub Actions secret and never leaves CI. Only the job that signs gets it, and that job builds nothing: it takes the built files, checks them and runs `bin/sign`. Its public half is `agentv-keyring/agentv.gpg`.
 - A pull request's test run never gets that key. It signs its packages with a throwaway key made for the run (`bin/test-key`), which only the run's own test box trusts.

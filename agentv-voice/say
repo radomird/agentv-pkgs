@@ -1,0 +1,80 @@
+#!/bin/bash
+
+# The TV's own voice: says one line. AgenTV's daemon runs this and knows
+# nothing else about the voice, so another voice only changes this package.
+#
+#   say <out.wav> <<<"a line"   the line on standard input, as a WAV file
+#   say --voices                the voices in this package, one a line
+#
+# AGENTV_VOICE picks another of the package's voices for one line. The line
+# is never written anywhere but to the speech program's own arguments.
+#
+# It's Kokoro, run by sherpa-onnx, which reads a word's sounds from a list
+# and skips a word that isn't on it. So a word the list doesn't have, such
+# as a show's name, gets its sounds from espeak-ng when that's installed:
+# a separate program, asked one word at a time.
+
+set -euo pipefail
+
+# The sounds are written in letters past ASCII, one symbol a letter.
+export LC_ALL=C.UTF-8
+
+dir=$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")
+kokoro="$dir/kokoro"
+
+if [[ ${1:-} == "--voices" ]]; then
+  cut -d' ' -f1 "$dir/voices"
+  exit 0
+fi
+
+out="${1:?usage: say <out.wav> <<<\"a line\"}"
+voice="${AGENTV_VOICE:-$(<"$dir/voice")}"
+[[ $voice =~ ^[a-z]{2}_[a-z]+$ ]] || { echo "say: no voice named $voice" >&2; exit 2; }
+entry=$(grep -m1 "^$voice " "$dir/voices") || { echo "say: no voice named $voice" >&2; exit 2; }
+read -r _ sid accent <<<"$entry"
+lexicon="$kokoro/lexicon-$accent-en.txt"
+
+text=$(tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')
+[[ -n $text ]] || { echo "say: nothing to say" >&2; exit 2; }
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# The words the list doesn't have, with their sounds from espeak-ng, in the
+# list's own symbols. A symbol the model doesn't know is left out.
+extra=""
+if type -P espeak-ng >/dev/null; then
+  cut -d' ' -f1 "$kokoro/tokens.txt" >"$work/symbols"
+  while read -r word; do
+    [[ -n $word ]] || continue
+    grep -q -m1 "^$word " "$lexicon" && continue
+    ipa=$(espeak-ng -q --ipa -v "en-$accent" -- "$word" 2>/dev/null | tr -d '\n ' || true)
+    [[ -n $ipa ]] || continue
+    sounds=$(sed -e 's/ɜːɹ/ɜɹ/g; s/ɜː/ɜɹ/g; s/ɚ/əɹ/g; s/ɐ/ə/g' \
+      -e 's/eɪ/A/g; s/aɪ/I/g; s/ɔɪ/Y/g; s/oʊ/O/g; s/əʊ/Q/g; s/aʊ/W/g' \
+      -e 's/dʒ/ʤ/g; s/tʃ/ʧ/g; s/r/ɹ/g; s/ʔ/t/g; s/x/k/g; s/ː//g' \
+      -e 's/əl$/ᵊl/; s/n̩/ᵊn/g; s/l̩/ᵊl/g' <<<"$ipa" |
+      grep -o . | while read -r symbol; do
+        grep -q -m1 -F -x -- "$symbol" "$work/symbols" && printf '%s ' "$symbol"
+      done || true)
+    [[ -n ${sounds// /} ]] && printf '%s %s\n' "$word" "${sounds% }" >>"$work/extra.txt"
+  done < <(tr '[:upper:]' '[:lower:]' <<<"$text" | tr -cs "a-z'" '\n' | sed "s/^'*//; s/'*\$//" | sort -u)
+  [[ -s $work/extra.txt ]] && extra=",$work/extra.txt"
+fi
+
+threads=$(nproc 2>/dev/null || echo 2)
+(( threads > 4 )) && threads=4
+
+# What the speech program prints goes nowhere, unless a check asks for it.
+status=0
+"$dir/sherpa-onnx-offline-tts" \
+  --kokoro-model="$kokoro/model.onnx" \
+  --kokoro-voices="$kokoro/voices.bin" \
+  --kokoro-tokens="$kokoro/tokens.txt" \
+  --kokoro-lexicon="$lexicon$extra" \
+  --num-threads="$threads" \
+  --sid="$sid" \
+  --output-filename="$out" \
+  "$text" >>"${AGENTV_VOICE_LOG:-/dev/null}" 2>&1 || status=$?
+[[ -n ${AGENTV_VOICE_LOG:-} && -s $work/extra.txt ]] && sed 's/^/say: sounds from espeak-ng: /' "$work/extra.txt" >>"$AGENTV_VOICE_LOG"
+exit "$status"

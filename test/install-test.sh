@@ -281,24 +281,55 @@ if [[ -f /usr/bin/agentv-share-store ]]; then
   pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
 fi
 
-# From stage 8's spoken answers on (Q157): agentv-voice has Piper and its
-# cori voice, root's and readable by anyone, and Piper says a line with the
-# libraries that come with it. An agentv with the voice names agentv-voice
-# and pipewire, for pw-play.
+# The TV's own voice: agentv-voice has a program named say, which takes a
+# line and writes a WAV file, with the speech program, the model and only
+# the voices the package names, root's and readable by anyone. It says a
+# line with nothing else installed, and a line with a number and a name in
+# it. An agentv with the voice names agentv-voice and pipewire, for pw-play.
 if pacman -Si agentv-voice >/dev/null 2>&1; then
   pacman -S --noconfirm --nodeps --nodeps agentv-voice >/dev/null || fail "agentv-voice installs with its signature checked"
   voice=/usr/lib/agentv-voice
-  [[ $(stat -c '%U %a' "$voice/piper/piper" 2>/dev/null) == "root 755" &&
-    $(stat -c '%U %a' "$voice/en_GB-cori-medium.onnx" 2>/dev/null) == "root 644" &&
-    -f $voice/en_GB-cori-medium.onnx.json ]] ||
-    fail "agentv-voice has Piper and the cori voice, root's and readable by anyone"
+  [[ $(stat -c '%U %a' "$voice/say" 2>/dev/null) == "root 755" &&
+    $(stat -c '%U %a' "$voice/sherpa-onnx-offline-tts" 2>/dev/null) == "root 755" &&
+    $(stat -c '%U %a' "$voice/kokoro/model.onnx" 2>/dev/null) == "root 644" &&
+    $(stat -c '%U %a' "$voice/kokoro/voices.bin" 2>/dev/null) == "root 644" &&
+    -f $voice/kokoro/tokens.txt && -f $voice/kokoro/lexicon-us-en.txt && -f $voice/voice && -f $voice/voices ]] ||
+    fail "agentv-voice has say, the speech program, the model and its voices, root's and readable by anyone"
+  # Nothing GPL comes in the package, and nothing of the bundle it leaves out.
+  if pacman -Qlq agentv-voice | grep -qi 'espeak\|piper\|-zh\|/dict/'; then
+    fail "agentv-voice carries no espeak-ng, no Piper and nothing for another language"
+  fi
+  for file in LICENSE-sherpa-onnx LICENSE-onnxruntime LICENSE-kokoro NOTICE; do
+    [[ -f /usr/share/licenses/agentv-voice/$file ]] || fail "agentv-voice has $file"
+  done
+  # The voice file has every place, and sound only in the named voices'.
+  one=$(( 510 * 256 * 4 ))
+  [[ $(stat -c %s "$voice/kokoro/voices.bin") == $(( one * 54 )) ]] || fail "the voice file has its 54 places"
+  named=$(cut -d' ' -f2 "$voice/voices" | sort -n | tr '\n' ' ')
+  for sid in $(seq 0 53); do
+    empty=$(dd if="$voice/kokoro/voices.bin" bs="$one" skip="$sid" count=1 status=none | tr -d '\0' | wc -c)
+    if [[ " $named" == *" $sid "* ]]; then
+      (( empty > 0 )) || fail "voice $sid is in the package"
+    else
+      (( empty == 0 )) || fail "voice $sid, which the package doesn't name, is left empty"
+    fi
+  done
+  grep -qx "$(<"$voice/voice")" <("$voice/say" --voices) || fail "the voice the TV speaks with is one of the package's"
   said=$(mktemp -d)
-  printf '%s\n' "i didn't get that" |
-    LD_LIBRARY_PATH="$voice/piper" "$voice/piper/piper" --model "$voice/en_GB-cori-medium.onnx" --output_file "$said/said.wav" >/dev/null 2>&1 ||
-    fail "Piper says a line with the cori voice"
-  [[ $(head -c 4 "$said/said.wav") == "RIFF" ]] || fail "Piper's line is a WAV"
+  printf '%s\n' "i didn't get that" | "$voice/say" "$said/said.wav" || fail "say says a line"
+  [[ $(head -c 4 "$said/said.wav") == "RIFF" ]] || fail "say's line is a WAV file"
+  short=$(stat -c %s "$said/said.wav")
+  printf '%s\n' "yes, a new episode of cosmos laundromat came out on friday, the fourteenth" | "$voice/say" "$said/long.wav" || fail "say says a longer line"
+  (( $(stat -c %s "$said/long.wav") > short )) || fail "a longer line is a longer file"
+  for name in $("$voice/say" --voices); do
+    printf '%s\n' "which one?" | AGENTV_VOICE=$name "$voice/say" "$said/$name.wav" || fail "say speaks as $name"
+    [[ $(head -c 4 "$said/$name.wav") == "RIFF" ]] || fail "$name's line is a WAV file"
+  done
+  if printf 'hello\n' | AGENTV_VOICE=af_sky "$voice/say" "$said/no.wav" 2>/dev/null; then
+    fail "say refuses a voice the package doesn't have"
+  fi
   rm -rf "$said"
-  pass "agentv-voice has Piper and the cori voice, root's and readable by anyone, and Piper says a line"
+  pass "agentv-voice has say and only its named voices, with nothing GPL in it, and says a line in each voice"
 fi
 if [[ -f /usr/share/agentv/daemon/voice.ts ]]; then
   depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
