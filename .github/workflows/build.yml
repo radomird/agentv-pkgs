@@ -5,6 +5,17 @@ name: Build
 # the way a box does (ADR-025). stable follows agentv-os's release tags, and
 # edge every commit of its agentv branch that passed the Check workflow.
 # Looks for something new every hour, and runs by hand for a channel and ref.
+#
+# Each channel goes through three jobs. The first builds, in an Arch
+# container, without the signing key. The second has the key and does
+# nothing but sign what the first built: it takes the files as they were
+# built, checks them against the checksums the build wrote down, and runs
+# bin/sign. The third publishes and installs. So the key is never in a job
+# that runs pacman, makepkg or code from agentv-os.
+#
+# The key is AGENTV_SIGNING_KEY, read through the "release" environment,
+# which only main may use. A run by hand on another branch builds, and
+# then stops at the signing job.
 
 on:
   schedule:
@@ -31,7 +42,7 @@ on:
         default: ""
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build
@@ -65,7 +76,7 @@ jobs:
           echo "Builds: $builds" | tee -a "$GITHUB_STEP_SUMMARY"
 
   build:
-    name: "${{ matrix.channel }}: build, sign, publish, install"
+    name: "${{ matrix.channel }}: build"
     needs: plan
     if: needs.plan.outputs.builds != '[]'
     runs-on: ubuntu-26.04
@@ -74,6 +85,11 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    # One output for each channel, since every channel's job writes here:
+    # the checksum of the list of what it built.
+    outputs:
+      edge: ${{ steps.sums.outputs.edge }}
+      stable: ${{ steps.sums.outputs.stable }}
     env:
       GH_TOKEN: ${{ github.token }}
       AGENTV_CHANNEL: ${{ matrix.channel }}
@@ -93,13 +109,125 @@ jobs:
           gh release download "$AGENTV_CHANNEL" -R "$GITHUB_REPOSITORY" -D repo --pattern '*.pkg.tar.*' || true
           ls -l repo
 
-      - name: Build and sign
-        env:
-          AGENTV_SIGNING_KEY: ${{ secrets.AGENTV_SIGNING_KEY }}
+      # No key in here: bin/build signs nothing.
+      - name: Build
         run: |
           docker run --rm -v "$PWD:/src" \
-            -e AGENTV_CHANNEL -e AGENTV_REF -e AGENTV_SOURCE -e AGENTV_REPO_URL -e AGENTV_SIGNING_KEY \
+            -e AGENTV_CHANNEL -e AGENTV_REF -e AGENTV_SOURCE -e AGENTV_REPO_URL \
             ghcr.io/archlinux/archlinux:latest /src/bin/build /src/repo
+          # The container wrote them as its own users.
+          sudo chown -R "$(id -u):$(id -g)" repo
+
+      # The list the signing job checks the files against. Its own checksum
+      # goes to that job as this job's output, not with the files.
+      - name: Write down what was built
+        id: sums
+        run: |
+          (cd repo && find . -maxdepth 1 -type f -printf '%f\0' | sort -z | xargs -0 sha256sum --) >SHA256SUMS
+          cat SHA256SUMS
+          echo "$AGENTV_CHANNEL=$(sha256sum SHA256SUMS | cut -d' ' -f1)" >>"$GITHUB_OUTPUT"
+
+      - name: Hand the files to the signing job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: built-${{ matrix.channel }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            repo/
+            SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  # The only job that has the key. It builds nothing and fetches nothing but
+  # the files the job above made.
+  sign:
+    name: "${{ matrix.channel }}: sign"
+    needs: [plan, build]
+    # A channel whose build failed stops at its own first step here, and the
+    # other channel still gets signed.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.builds != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    env:
+      AGENTV_CHANNEL: ${{ matrix.channel }}
+    steps:
+      - name: The build's own list of what it made
+        env:
+          SUMS: ${{ needs.build.outputs[matrix.channel] }}
+        run: |
+          if [[ ! $SUMS =~ ^[0-9a-f]{64}$ ]]; then
+            echo "::error::$AGENTV_CHANNEL wasn't built, so there's nothing to sign."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            bin
+            agentv-keyring
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: built-${{ matrix.channel }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Check the files are the ones the build made
+        env:
+          SUMS: ${{ needs.build.outputs[matrix.channel] }}
+        run: |
+          echo "$SUMS  SHA256SUMS" | sha256sum -c -
+          (cd repo && sha256sum -c ../SHA256SUMS)
+          # And nothing came with them that the build didn't list.
+          diff <(cd repo && find . -maxdepth 1 -type f -printf '%f\n' | sort) <(sed -E 's/^[0-9a-f]{64}  //' SHA256SUMS | sort)
+          [[ -z $(find repo -mindepth 1 ! -type f) ]]
+
+      - name: Sign
+        env:
+          AGENTV_SIGNING_KEY: ${{ secrets.AGENTV_SIGNING_KEY }}
+        run: bin/sign repo
+
+      - name: Hand the signed files on
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-${{ matrix.channel }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: repo/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    name: "${{ matrix.channel }}: publish, install"
+    needs: [plan, sign]
+    # As for signing: one channel that failed doesn't hold the other back.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.builds != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AGENTV_CHANNEL: ${{ matrix.channel }}
+      AGENTV_REPO_URL: https://github.com/${{ github.repository }}/releases/download
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # There's no such file when this channel wasn't built or signed, and
+      # the job stops here.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed-${{ matrix.channel }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: repo
 
       - name: Publish
         run: bin/publish "$AGENTV_CHANNEL" repo

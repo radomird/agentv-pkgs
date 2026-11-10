@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Adds a test run's throwaway key (bin/test-key) to a copy of agentv-keyring,
+# beside AgenTV's own: to agentv.gpg, to agentv-trusted, and to the PKGBUILD's
+# checksums. The package built from that copy makes a test box trust the
+# run's packages. AgenTV's own key stays, so the box still takes what's
+# really published, such as the app index.
+#
+# bin/build runs it on its working copy when AGENTV_TEST_KEY is set. It's
+# never run on the folder in the repo: check.yml's checksum check would say
+# so if it had been.
+#
+# Usage: bin/test-keyring <agentv-keyring copy> <public.asc>
+
+set -euo pipefail
+
+keyring=$(realpath "${1:?usage: bin/test-keyring <agentv-keyring copy> <public.asc>}")
+public=$(realpath "${2:?usage: bin/test-keyring <agentv-keyring copy> <public.asc>}")
+
+for file in agentv.gpg agentv-trusted PKGBUILD; do
+  [[ -f $keyring/$file ]] || { echo "bin/test-keyring: $keyring has no $file" >&2; exit 1; }
+done
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+export GNUPGHOME="$work/gnupg"
+mkdir -m 700 "$GNUPGHOME"
+
+mapfile -t incoming < <(gpg --batch --with-colons --show-keys "$public" | awk -F: '$1 == "pub" { want = 1 } want && $1 == "fpr" { print $10; want = 0 }')
+if (( ${#incoming[@]} != 1 )); then
+  echo "bin/test-keyring: $public holds ${#incoming[@]} keys, expected one throwaway key" >&2
+  exit 1
+fi
+fpr=${incoming[0]}
+if grep -q "^$fpr:" "$keyring/agentv-trusted"; then
+  echo "bin/test-keyring: $fpr is trusted there already" >&2
+  exit 1
+fi
+
+# One armored file with every key, the way gpg writes it, so whatever reads
+# the keyring reads all of them.
+gpg --batch --quiet --import "$keyring/agentv.gpg" "$public"
+mapfile -t trusted < <(cut -d: -f1 "$keyring/agentv-trusted")
+gpg --batch --armor --export "${trusted[@]}" "$fpr" >"$work/agentv.gpg"
+cat "$work/agentv.gpg" >"$keyring/agentv.gpg"
+printf '%s:4:\n' "$fpr" >>"$keyring/agentv-trusted"
+
+# makepkg checks the files against the PKGBUILD's checksums.
+for file in agentv.gpg agentv-trusted; do
+  sum=$(sha256sum "$keyring/$file" | cut -d' ' -f1)
+  sed -i -E "s/^  '[0-9a-f]{64}'  # $file\$/  '$sum'  # $file/" "$keyring/PKGBUILD"
+  grep -qF "'$sum'  # $file" "$keyring/PKGBUILD" || { echo "bin/test-keyring: couldn't set $file's checksum in the PKGBUILD" >&2; exit 1; }
+done
+
+echo "This build's agentv-keyring also trusts the run's throwaway key, $fpr"

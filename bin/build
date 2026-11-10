@@ -1,13 +1,22 @@
 #!/bin/bash
 
-# Builds agentv, agentv-keyring and agentv-voice into a signed pacman repository in
+# Builds agentv, agentv-keyring and agentv-voice into a pacman repository in
 # <repo-dir>. A package that's already there at the same version is kept as
 # it is, so a box never sees two different files for one version. Runs as
 # root in an Arch container; makepkg runs as a throwaway user.
 #
+# Nothing is signed here. bin/sign signs what this leaves, afterwards and
+# outside this container, so the signing key is never near pacman, makepkg
+# or the code being packaged. Nothing is published before that.
+#
+# With AGENTV_TEST_KEY, the public half of a throwaway key (bin/test-key),
+# the agentv-keyring built here trusts that key as well as AgenTV's. That's
+# for a pull request's or a branch's test run, whose packages are signed
+# with the throwaway key and never leave the run. A release build never
+# sets it.
+#
 # Usage: bin/build <repo-dir>
-# Needs: AGENTV_CHANNEL, AGENTV_SOURCE, AGENTV_REF, AGENTV_REPO_URL and
-# AGENTV_SIGNING_KEY (the armored secret key, from an Actions secret).
+# Needs: AGENTV_CHANNEL, AGENTV_SOURCE, AGENTV_REF and AGENTV_REPO_URL.
 
 set -euo pipefail
 
@@ -15,8 +24,14 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repo=$(realpath "${1:?usage: bin/build <repo-dir>}")
 
 : "${AGENTV_CHANNEL:?}" "${AGENTV_SOURCE:?}" "${AGENTV_REF:?}" "${AGENTV_REPO_URL:?}"
-if [[ -z ${AGENTV_SIGNING_KEY:-} ]]; then
-  echo "::error::AGENTV_SIGNING_KEY is empty. Packages are only ever published signed." >&2
+# A caller from before bin/sign still hands the key over and expects signed
+# packages back. It gets them, signed at the very end, and the key is out of
+# the environment before pacman or makepkg run. Take this out once no
+# workflow passes AGENTV_SIGNING_KEY here (agentv-os's image run did).
+signing_key=${AGENTV_SIGNING_KEY:-}
+unset AGENTV_SIGNING_KEY
+if [[ -n ${AGENTV_TEST_KEY:-} && ! -f $AGENTV_TEST_KEY ]]; then
+  echo "::error::AGENTV_TEST_KEY names a throwaway key's public half, and $AGENTV_TEST_KEY isn't a file" >&2
   exit 1
 fi
 
@@ -37,15 +52,18 @@ as_builder() {
     AGENTV_REF="$AGENTV_REF" AGENTV_REPO_URL="$AGENTV_REPO_URL" "$@"
 }
 
-# The key lives only in this container's keyring and is gone with it.
 as_builder mkdir -m 700 -p /home/builder/.gnupg
-printf '%s\n' "$AGENTV_SIGNING_KEY" | as_builder gpg --batch --quiet --import
-fpr=$(as_builder gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
-trusted=$(cut -d: -f1 "$ROOT/agentv-keyring/agentv-trusted")
-if [[ $fpr != "$trusted" ]]; then
-  echo "::error::the signing key ($fpr) isn't the one agentv-keyring trusts ($trusted)" >&2
-  exit 1
+
+# A test run's keyring trusts the run's throwaway key too, in the copy this
+# build works on. The files in the repo stay AgenTV's key alone.
+if [[ -n ${AGENTV_TEST_KEY:-} ]]; then
+  install -m 644 -o builder -g builder "$AGENTV_TEST_KEY" "$work/test-key.asc"
+  as_builder "$ROOT/bin/test-keyring" "$work/agentv-keyring" "$work/test-key.asc"
 fi
+
+# What a published package's signature is checked against: the keys this
+# build's agentv-keyring carries, and no others.
+as_builder gpg --batch --quiet --yes --dearmor --output "$work/trusted.gpg" "$work/agentv-keyring/agentv.gpg"
 
 current=()
 for pkg in agentv-keyring agentv-voice agentv; do
@@ -75,9 +93,11 @@ for pkg in agentv-keyring agentv-voice agentv; do
   fi
 
   echo "Building $pkg"
-  as_builder makepkg --force --nodeps --sign --key "$fpr" >/dev/null
+  as_builder makepkg --force --nodeps >/dev/null
   for file in "${files[@]}"; do
-    cp "$file" "$file.sig" "$repo/"
+    # A signature left from another build of this name isn't this file's.
+    rm -f "$repo/${file##*/}.sig"
+    cp "$file" "$repo/"
   done
 done
 
@@ -91,18 +111,21 @@ for file in *.pkg.tar.*; do
 done
 rm -f agentv.db* agentv.files*
 
+# A package kept from what's published has its signature. One built just now
+# has none yet: bin/sign gives it one.
+chown -R builder "$repo"
 for name in "${current[@]}"; do
-  as_builder gpg --batch --quiet --verify "$name.sig" "$name"
+  [[ -f $name.sig ]] || continue
+  as_builder gpgv --quiet --keyring "$work/trusted.gpg" "$name.sig" "$name"
 done
 
-chown builder "$repo"
-as_builder repo-add --quiet --sign --key "$fpr" agentv.db.tar.gz "${current[@]}"
+as_builder repo-add --quiet agentv.db.tar.gz "${current[@]}"
 
 # release.json, for Settings → Updates (ADR-025): the version, the date, a
-# security flag and What's new, signed like the packages. What's new comes
-# from agentv-os's release-notes/<version>.txt, up to five lines, for a
-# release; a first line of "security" marks a security release. Edge builds
-# have no notes.
+# security flag and What's new, signed like the packages (bin/sign). What's
+# new comes from agentv-os's release-notes/<version>.txt, up to five lines,
+# for a release; a first line of "security" marks a security release. Edge
+# builds have no notes.
 version=$(printf '%s\n' "${current[@]}" | sed -nE 's/^agentv-([0-9][^-]*)-[0-9]+-any\.pkg\.tar\.zst$/\1/p' | head -n 1)
 source_dir="$work/agentv/src/agentv-os"
 notes_file="$source_dir/release-notes/$version.txt"
@@ -119,15 +142,19 @@ fi
 jq -n --arg version "$version" --arg date "$date" --arg channel "$AGENTV_CHANNEL" --argjson security "$security" \
   '{version: $version, date: $date, channel: $channel, security: $security, notes: ($ARGS.positional[:5])}' \
   --args ${notes[@]+"${notes[@]}"} >release.json
-chown builder release.json
-as_builder gpg --batch --yes --quiet --local-user "$fpr" --detach-sign --output release.json.sig release.json
+rm -f release.json.sig
 cat release.json
 
 # GitHub release assets can't be symlinks, so pacman's names become copies.
+# bin/sign makes the signatures' copies.
 for db in agentv.db agentv.files; do
   rm -f "$db" "$db.sig"
   cp "$db.tar.gz" "$db"
-  cp "$db.tar.gz.sig" "$db.sig"
 done
+
+if [[ -n $signing_key ]]; then
+  echo "::notice::bin/build was handed the signing key. New callers build first, then run bin/sign with it."
+  AGENTV_SIGNING_KEY=$signing_key "$ROOT/bin/sign" "$repo"
+fi
 
 ls -l "$repo"
