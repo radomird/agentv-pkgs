@@ -10,7 +10,7 @@ Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. Agen
 
 - **`agentv`** is everything AgenTV adds: the `agentv` command, its migrations, and its hooks into Omarchy's updates. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
 - **`agentv-keyring`** holds the public key the packages are signed with.
-- **`agentv-voice`** is [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers out loud from its first boot when your AI provider has no voice of its own (coming soon). Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
+- **`agentv-voice`** is [Piper](https://github.com/rhasspy/piper) and its cori voice, so the TV can say its answers out loud from its first boot when your AI provider has no voice of its own. Piper is MIT, the cori voice is public domain, and the espeak-ng library that comes with Piper is GPL-3.0.
 
 That way one `agentv update` (it runs `omarchy update` underneath) updates Arch, Omarchy and AgenTV together, with one snapshot first.
 
