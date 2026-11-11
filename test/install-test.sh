@@ -229,6 +229,14 @@ if [[ -f /usr/bin/agentv-hotspot ]]; then
   pass "the setup hotspot opens only when it's needed, with dnsmasq named and its captive page"
 fi
 
+# A TV that loses its network opens its hotspot again by itself. The watch
+# that does it starts with the TV, so the package has to ship it enabled.
+if [[ -f /usr/lib/systemd/system/agentv-hotspot-watch.service ]]; then
+  [[ -L /usr/lib/systemd/system/multi-user.target.wants/agentv-hotspot-watch.service ]] ||
+    fail "the watch for a lost network is enabled"
+  pass "the watch for a lost network starts with the TV"
+fi
+
 # From stage 5 on: TV setup's screens ship whole, in place of the stage 0
 # welcome page, with the daemon's side that keeps their step.
 if [[ -f /usr/share/agentv/daemon/setup.ts ]]; then
