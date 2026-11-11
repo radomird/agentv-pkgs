@@ -24,12 +24,12 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repo=$(realpath "${1:?usage: bin/build <repo-dir>}")
 
 : "${AGENTV_CHANNEL:?}" "${AGENTV_SOURCE:?}" "${AGENTV_REF:?}" "${AGENTV_REPO_URL:?}"
-# A caller from before bin/sign still hands the key over and expects signed
-# packages back. It gets them, signed at the very end, and the key is out of
-# the environment before pacman or makepkg run. Take this out once no
-# workflow passes AGENTV_SIGNING_KEY here (agentv-os's image run did).
-signing_key=${AGENTV_SIGNING_KEY:-}
-unset AGENTV_SIGNING_KEY
+# A key has no business in this container, so a caller that hands one over
+# is stopped here, before pacman or makepkg run anywhere near it.
+if [[ -n ${AGENTV_SIGNING_KEY:-} ]]; then
+  echo "::error::bin/build signs nothing, so it takes no AGENTV_SIGNING_KEY. Build first, then run bin/sign with the key, outside this container." >&2
+  exit 1
+fi
 if [[ -n ${AGENTV_TEST_KEY:-} && ! -f $AGENTV_TEST_KEY ]]; then
   echo "::error::AGENTV_TEST_KEY names a throwaway key's public half, and $AGENTV_TEST_KEY isn't a file" >&2
   exit 1
@@ -151,10 +151,5 @@ for db in agentv.db agentv.files; do
   rm -f "$db" "$db.sig"
   cp "$db.tar.gz" "$db"
 done
-
-if [[ -n $signing_key ]]; then
-  echo "::notice::bin/build was handed the signing key. New callers build first, then run bin/sign with it."
-  AGENTV_SIGNING_KEY=$signing_key "$ROOT/bin/sign" "$repo"
-fi
 
 ls -l "$repo"
