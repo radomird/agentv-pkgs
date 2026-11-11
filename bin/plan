@@ -11,6 +11,15 @@
 # a change to the PKGBUILDs needs: bin/build keeps every file whose name
 # (version and pkgrel) is already published, and rebuilds the rest. Reads the
 # owner from GitHub's own context, so no owner is written here.
+#
+# Whatever names the ref, a tag, the Check run or a person, it's built only
+# when its commit is one agentv-os's agentv branch has: the branch's newest
+# commit, an older one, or a release tag on one of those. A tag's name alone
+# isn't enough. So what gets signed and published is always merged code.
+# The plan carries the commit itself (commit=<sha>), for a tag too, so the
+# build fetches what was checked here even if the tag has moved since.
+# On the hourly run, a ref that doesn't pass is left out, with an error in
+# the run, and the other channel still builds. By hand, it stops the run.
 
 set -euo pipefail
 
@@ -23,9 +32,56 @@ if [[ ${1:-} == "--all" ]]; then
   shift
 fi
 
+os="repos/$owner/agentv-os"
+
+# Prints the commit a ref (tag=v0.1.0 or commit=<sha>) is on, when agentv
+# has that commit. Otherwise says why not, and fails.
+merged() {
+  local ref=$1 sha kind status
+  case $ref in
+    tag=*)
+      if [[ ! ${ref#tag=} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "::error::$ref isn't a release tag, like tag=v0.1.0." >&2
+        return 1
+      fi
+      # The tag by its exact name, then through a tag that has a message of
+      # its own, to the commit.
+      read -r kind sha < <(gh api "$os/git/ref/tags/${ref#tag=}" --jq '"\(.object.type) \(.object.sha)"' 2>/dev/null) || true
+      if [[ ${kind:-} == "tag" ]]; then
+        read -r kind sha < <(gh api "$os/git/tags/$sha" --jq '"\(.object.type) \(.object.sha)"' 2>/dev/null) || true
+      fi
+      if [[ ${kind:-} != "commit" || ! ${sha:-} =~ ^[0-9a-f]{40}$ ]]; then
+        echo "::error::Couldn't find the commit agentv-os's ${ref#tag=} tag is on." >&2
+        return 1
+      fi
+      ;;
+    commit=*)
+      sha=${ref#commit=}
+      if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
+        echo "::error::$ref isn't a whole commit, like commit=<40 letters and digits>." >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "::error::A ref is tag=v0.1.0 or commit=<sha>, not $ref." >&2
+      return 1
+      ;;
+  esac
+  status=$(gh api "$os/compare/$sha...agentv" --jq .status 2>/dev/null) || status=""
+  if [[ ! $status =~ ^(ahead|identical)$ ]]; then
+    echo "::error::agentv-os's agentv branch doesn't have $ref ($sha), so it isn't built, signed or published. Only what's merged is." >&2
+    return 1
+  fi
+  echo "$sha"
+}
+
 if [[ -n ${1:-} ]]; then
-  jq -cn --arg channel "$1" --arg ref "${2:?a channel needs a ref, like tag=v0.1.0 or commit=<sha>}" \
-    '[{channel: $channel, ref: $ref}]'
+  if [[ ! $1 =~ ^(edge|stable)$ ]]; then
+    echo "::error::The channel is edge or stable, not $1." >&2
+    exit 1
+  fi
+  commit=$(merged "${2:?a channel needs a ref, like tag=v0.1.0 or commit=<sha>}")
+  jq -cn --arg channel "$1" --arg ref "commit=$commit" '[{channel: $channel, ref: $ref}]'
   exit 0
 fi
 
@@ -38,13 +94,17 @@ plan=()
 tag=$(gh api "repos/$owner/agentv-os/tags?per_page=100" --jq '.[].name' |
   grep -E '^v0\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
 if [[ -n $tag ]] && { (( all )) || ! published stable | grep -qE "^agentv-${tag#v}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
-  plan+=("$(jq -cn --arg ref "tag=$tag" '{channel: "stable", ref: $ref}')")
+  if commit=$(merged "tag=$tag"); then
+    plan+=("$(jq -cn --arg ref "commit=$commit" '{channel: "stable", ref: $ref}')")
+  fi
 fi
 
 sha=$(gh api "repos/$owner/agentv-os/actions/workflows/check.yml/runs?branch=agentv&event=push&status=success&per_page=1" \
   --jq '.workflow_runs[0].head_sha // empty')
 if [[ -n $sha ]] && { (( all )) || ! published edge | grep -qE "\.g${sha:0:7}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
-  plan+=("$(jq -cn --arg ref "commit=$sha" '{channel: "edge", ref: $ref}')")
+  if commit=$(merged "commit=$sha"); then
+    plan+=("$(jq -cn --arg ref "commit=$commit" '{channel: "edge", ref: $ref}')")
+  fi
 fi
 
 printf '%s\n' ${plan[@]+"${plan[@]}"} | jq -cs .
