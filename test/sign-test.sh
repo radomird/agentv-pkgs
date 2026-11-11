@@ -151,6 +151,20 @@ rm "$work/repo/release.json"
 refuses "a repository bin/build didn't finish isn't signed" \
   env AGENTV_SIGNING_KEY="$(cat "$work/key/secret.asc")" AGENTV_TEST_KEY="$work/key/public.asc" "$ROOT/bin/sign" "$work/repo"
 
+# --- bin/build ---------------------------------------------------------------
+
+# It stops at the key, before it sets up a container or fetches anything,
+# so this runs anywhere.
+build_env=(AGENTV_CHANNEL=edge AGENTV_SOURCE=https://example.invalid/agentv-os.git AGENTV_REF=commit=0
+  AGENTV_REPO_URL=https://example.invalid/releases)
+mkdir "$work/built"
+refuses "bin/build stops when it's handed the signing key" \
+  env "${build_env[@]}" AGENTV_SIGNING_KEY="$(cat "$work/key/secret.asc")" "$ROOT/bin/build" "$work/built"
+cp "$work/check.log" "$work/build.log"
+check "and says it signs nothing" grep 'takes no AGENTV_SIGNING_KEY' "$work/build.log"
+check "and has built nothing" test -z "$(ls -A "$work/built")"
+refuses "bin/build never runs bin/sign" grep -n 'bin/sign"' "$ROOT/bin/build"
+
 # --- The build workflow ------------------------------------------------------
 
 workflow="$ROOT/.github/workflows/build.yml"
