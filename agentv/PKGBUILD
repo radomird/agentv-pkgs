@@ -43,7 +43,10 @@ options=(!debug)
 # The box check names the GPU from hwdata's pci.ids, asks libva-utils'
 # vainfo which video it decodes in hardware, and vulkan-tools' vulkaninfo
 # whether it's integrated or discrete.
-depends=(omarchy agentv-keyring agentv-voice avahi bash bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hwdata hyprland iptables jq
+# Settings pairs Bluetooth game controllers through bluez, and looks for
+# them with bluez-utils' bluetoothctl. Omarchy has both today; naming them
+# keeps pairing working if it doesn't.
+depends=(omarchy agentv-keyring agentv-voice avahi bash bluez bluez-utils bubblewrap chromium cifs-utils curl dnsmasq esbuild ffmpeg gamescope git gnupg gvfs gvfs-nfs gvfs-smb hwdata hyprland iptables jq
   libva-utils mise mpv mpv-mpris networkmanager nodejs npm pacman-contrib pipewire polkit python quickshell smbclient udisks2 uwsm vulkan-tools)
 makedepends=(git)
 install=agentv.install
