@@ -51,6 +51,11 @@ jobs:
       - name: The signing scripts sign what they should, and nothing else
         run: test/sign-test.sh
 
+      # What gets built, signed and published, on a stand-in GitHub: only
+      # a commit agentv-os's agentv branch has, whoever names it.
+      - name: The plan builds only what's merged
+        run: test/plan-test.sh
+
       # makepkg reads the PKGBUILDs as bash; check that they parse and that
       # the keyring's checksums match its files.
       - name: The PKGBUILDs parse

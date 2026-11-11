@@ -5,6 +5,8 @@ name: Build
 # the way a box does (ADR-025). stable follows agentv-os's release tags, and
 # edge every commit of its agentv branch that passed the Check workflow.
 # Looks for something new every hour, and runs by hand for a channel and ref.
+# Either way, bin/plan lets through only a commit agentv-os's agentv branch
+# has, before anything is built or signed.
 #
 # Each channel goes through three jobs. The first builds, in an Arch
 # container, without the signing key. The second has the key and does
@@ -36,7 +38,7 @@ on:
         options: [edge, stable]
         default: edge
       ref:
-        description: "agentv-os ref, like tag=v0.1.0 or commit=<sha> (empty: what the channels would build next)"
+        description: "agentv-os ref that agentv has, like tag=v0.1.0 or commit=<whole sha> (empty: what the channels would build next)"
         type: string
         default: ""
 
