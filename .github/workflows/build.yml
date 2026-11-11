@@ -25,7 +25,6 @@ on:
     paths:
       - "agentv/**"
       - "agentv-keyring/**"
-      - "agentv-voice/**"
       - "bin/**"
       - "test/**"
       - ".github/workflows/build.yml"
