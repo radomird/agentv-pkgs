@@ -296,8 +296,10 @@ fi
 depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
 grep -qx pipewire <<<"$depends" || fail "the package depends on pipewire"
 if grep -qx agentv-voice <<<"$depends"; then
-  pacman -Q agentv-voice >/dev/null || fail "agentv $version depends on agentv-voice, and it was installed with it"
-  pass "agentv $version depends on agentv-voice, and the channel has it"
+  # agentv went in with --nodeps above, so the voice isn't installed: it's
+  # the channel that has to offer it, for a box that installs agentv whole.
+  pacman -Si agentv-voice >/dev/null || fail "agentv $version depends on agentv-voice, and the $channel channel has it"
+  pass "agentv $version depends on agentv-voice, and the $channel channel has it"
 else
   if pacman -Si agentv-voice >/dev/null 2>&1; then
     fail "the repository has no agentv-voice"
