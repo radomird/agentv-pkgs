@@ -3,7 +3,9 @@
 # Publishes a built repository as the assets of the release named after its
 # channel. New packages go up first, then the databases that point at them,
 # and only then do old packages come down, so a box reading the release
-# mid-publish never finds a database pointing at a missing file.
+# mid-publish never finds a database pointing at a missing file. A channel
+# whose agentv needs a package the folder doesn't have isn't published at
+# all.
 #
 # Usage: bin/publish <channel> <repo-dir>
 
@@ -12,6 +14,37 @@ set -euo pipefail
 channel="${1:?usage: bin/publish <channel> <repo-dir>}"
 repo="${2:?usage: bin/publish <channel> <repo-dir>}"
 pkgs="${GITHUB_REPOSITORY:?}"
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Nothing goes up unless the channel is whole: its agentv.db lists agentv
+# and every one of AgenTV's packages agentv depends on. Removing old
+# packages below then can't take one agentv still needs, since each is in
+# this folder.
+"$ROOT/bin/channel-deps" --db "$repo"
+
+# A channel only moves forward. A run by hand can build an older release
+# (stable from v0.2.0 once 1.0.0 is out), and publishing it would put
+# every box's update check back on the older one. The same version again
+# is fine: a rebuild keeps each published file as it was. Going back on
+# purpose says so: AGENTV_PUBLISH_BACK=1, which only the Build run by hand
+# with "back" ticked sets.
+new_version=$(jq -r '.version // empty' "$repo/release.json")
+[[ -n $new_version ]] || { echo "::error::$repo/release.json has no version." >&2; exit 1; }
+live_version=""
+if gh release view "$channel" -R "$pkgs" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx release.json; then
+  live_version=$(gh release download "$channel" -R "$pkgs" -p release.json -O - | jq -r '.version // empty') || {
+    echo "::error::Couldn't read the $channel channel's release.json, so it isn't known which version it's on. Nothing is published." >&2
+    exit 1
+  }
+fi
+if [[ -n $live_version && $live_version != "$new_version" &&
+  $(printf '%s\n%s\n' "$live_version" "$new_version" | sort -V | tail -n 1) == "$live_version" ]]; then
+  if [[ ${AGENTV_PUBLISH_BACK:-} != "1" ]]; then
+    echo "::error::The $channel channel is on agentv $live_version, and this is $new_version, which is older. A channel only moves forward, so nothing is published. To go back on purpose, run the Build by hand with back ticked." >&2
+    exit 1
+  fi
+  echo "Going back on purpose: $channel moves from $live_version to $new_version."
+fi
 
 if ! gh release view "$channel" -R "$pkgs" >/dev/null 2>&1; then
   # Only stable is a full release; edge is for development (ADR-025).

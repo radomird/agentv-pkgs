@@ -1,0 +1,109 @@
+#!/bin/bash
+
+# Says which of AgenTV's own packages a channel's agentv depends on, and
+# checks the channel has each of them.
+#
+# A channel's packages aren't all built every time. agentv-voice was built
+# for 0.1.x and 0.2.0 and isn't any more, and stable's agentv 0.2.0 still
+# depends on it. So a build has to keep a published package its channel's
+# agentv needs, and a publish must never go out without one: a box can't
+# install agentv from a channel that lacks it.
+#
+#   bin/channel-deps <repo-dir> <agentv-package>
+#       Prints, a line each, the file in <repo-dir> of every package
+#       <agentv-package> depends on whose name starts with agentv-, the
+#       newest version when there's more than one. Fails, naming it, when
+#       one of them isn't in <repo-dir>. bin/build keeps what it prints.
+#   bin/channel-deps --db <repo-dir>
+#       Checks <repo-dir> is a whole channel: one agentv package, and its
+#       agentv.db lists that agentv and every one of AgenTV's packages it
+#       depends on, each with its file in <repo-dir>. bin/publish runs this
+#       before it uploads anything.
+#
+# Reads each package's .PKGINFO with tar, which needs zstd. Changes
+# nothing.
+
+set -euo pipefail
+
+usage() {
+  echo "usage: bin/channel-deps <repo-dir> <agentv-package> | --db <repo-dir>" >&2
+  exit 2
+}
+
+stop() {
+  echo "::error::$*" >&2
+  exit 1
+}
+
+# A package file's own name and version, from its .PKGINFO: "name version".
+info() {
+  tar -xOf "$1" .PKGINFO 2>/dev/null | awk -F' = ' '
+    $1 == "pkgname" { name = $2 }
+    $1 == "pkgver" { version = $2 }
+    END { if (name != "" && version != "") print name, version }
+  '
+}
+
+# What a package depends on whose name is one of AgenTV's, a name a line,
+# with any version limit taken off.
+needs() {
+  tar -xOf "$1" .PKGINFO 2>/dev/null | awk -F' = ' '$1 == "depend" { print $2 }' |
+    sed -E 's/[<>=].*$//' | grep -E '^agentv-' | sort -u || true
+}
+
+# The newest file in $1 that is package $2, or nothing.
+newest() {
+  local dir=$1 want=$2 file name version best="" best_version=""
+  for file in "$dir"/"$want"-[0-9]*.pkg.tar.zst; do
+    [[ -f $file ]] || continue
+    read -r name version < <(info "$file") || continue
+    [[ $name == "$want" ]] || continue
+    if [[ -z $best_version || $(printf '%s\n%s\n' "$best_version" "$version" | sort -V | tail -n 1) == "$version" ]]; then
+      best=$file
+      best_version=$version
+    fi
+  done
+  [[ -n $best ]] && echo "$best"
+}
+
+deps() {
+  local dir=$1 agentv=$2 want file
+  [[ -f $agentv ]] || stop "No agentv package at $agentv."
+  while IFS= read -r want; do
+    [[ -n $want ]] || continue
+    file=$(newest "$dir" "$want") ||
+      stop "agentv ($(info "$agentv")) depends on $want, and this channel doesn't have it. A box couldn't install agentv from it, so nothing is built or published. Put $want back on the channel first."
+    echo "${file##*/}"
+  done < <(needs "$agentv")
+}
+
+db() {
+  local dir=$1 agentv name version file listed want
+  local -a found=()
+  for file in "$dir"/agentv-[0-9]*.pkg.tar.zst; do
+    [[ -f $file ]] && found+=("$file")
+  done
+  (( ${#found[@]} == 1 )) || stop "A channel has one agentv package, and $dir has ${#found[@]}."
+  agentv=${found[0]}
+  [[ -f $dir/agentv.db ]] || stop "$dir has no agentv.db."
+  listed=$(tar -tzf "$dir/agentv.db" | sed -n 's#^\([^/]*\)/$#\1#p') || stop "$dir/agentv.db can't be read."
+
+  read -r name version < <(info "$agentv") || stop "${agentv##*/} has no .PKGINFO."
+  grep -qx -- "$name-$version" <<<"$listed" || stop "agentv.db doesn't list ${agentv##*/}."
+  while IFS= read -r want; do
+    [[ -n $want ]] || continue
+    file=$(newest "$dir" "$want") ||
+      stop "agentv $version depends on $want, and this channel's folder doesn't have it. Nothing is published: a box couldn't install agentv from it."
+    read -r name version < <(info "$file")
+    grep -qx -- "$name-$version" <<<"$listed" ||
+      stop "agentv depends on $want, and agentv.db doesn't list it (${file##*/} is in the folder). Nothing is published: a box couldn't install agentv from it."
+    [[ -s $file.sig ]] || stop "${file##*/} has no signature beside it."
+  done < <(needs "$agentv")
+  echo "agentv.db lists agentv and every one of AgenTV's packages it depends on."
+}
+
+case ${1:-} in
+  --db) (( $# == 2 )) || usage; db "$2" ;;
+  "") usage ;;
+  *) (( $# == 2 )) || usage; deps "$1" "$2" ;;
+esac

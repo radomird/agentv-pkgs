@@ -8,6 +8,12 @@ name: Build
 # Either way, bin/plan lets through only a commit agentv-os's agentv branch
 # has, before anything is built or signed.
 #
+# A release tag is agentv-v1.0.0 from 1.0 on, and v0.2.0 before that. The
+# newest one is stable. A candidate's tag (agentv-v1.0.0-rc1) builds
+# nothing here: its ISO carries edge's packages. When the hourly run leaves
+# something out, like a release tag that isn't on agentv, the run fails and
+# opens an issue, and the other channel still builds.
+#
 # Each channel goes through three jobs. The first builds, in an Arch
 # container, without the signing key. The second has the key and does
 # nothing but sign what the first built: it takes the files as they were
@@ -38,9 +44,13 @@ on:
         options: [edge, stable]
         default: edge
       ref:
-        description: "agentv-os ref that agentv has, like tag=v0.1.0 or commit=<whole sha> (empty: what the channels would build next)"
+        description: "agentv-os ref that agentv has, like tag=agentv-v1.0.0 or commit=<whole sha> (empty: what the channels would build next)"
         type: string
         default: ""
+      back:
+        description: "Let this build replace a newer version on its channel (going back on purpose)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -55,6 +65,7 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       builds: ${{ steps.plan.outputs.builds }}
+      refused: ${{ steps.plan.outputs.refused }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -65,7 +76,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CHANNEL: ${{ inputs.channel }}
           REF: ${{ inputs.ref }}
+          # Where bin/plan writes what it left out and why, a line each.
+          AGENTV_PLAN_REFUSED: ${{ runner.temp }}/refused
         run: |
+          : >"$AGENTV_PLAN_REFUSED"
           if [[ -n $REF ]]; then
             builds=$(bin/plan "$CHANNEL" "$REF")
           elif [[ $GITHUB_EVENT_NAME == "push" || $GITHUB_EVENT_NAME == "workflow_dispatch" ]]; then
@@ -74,7 +88,56 @@ jobs:
             builds=$(bin/plan)
           fi
           echo "builds=$builds" >>"$GITHUB_OUTPUT"
+          echo "refused=$(jq -Rsc 'split("\n") | map(select(. != ""))' "$AGENTV_PLAN_REFUSED")" >>"$GITHUB_OUTPUT"
           echo "Builds: $builds" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # A ref the plan left out, like a release tag on a commit agentv doesn't
+  # have, used to be one error line in an hourly run nobody opens. So it's
+  # said where it's seen: this job fails, which turns the run red, and it
+  # opens an issue here. The channel that was fine still builds. Once a run
+  # leaves nothing out, the issue is closed.
+  left-out:
+    name: Say what was left out
+    needs: plan
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REFUSED: ${{ needs.plan.outputs.refused }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="The build left something out"
+          number=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number,title |
+            jq -r --arg title "$title" '[.[] | select(.title == $title) | .number][0] // empty')
+          lines=$(jq -r '.[]' <<<"${REFUSED:-[]}")
+          if [[ -z $lines ]]; then
+            if [[ -n $number ]]; then
+              gh issue close "$number" -R "$GITHUB_REPOSITORY" --comment "This run left nothing out: $RUN"
+            fi
+            echo "Nothing was left out."
+            exit 0
+          fi
+          {
+            echo "The build looked for something new and left this out. It wasn't built, signed or published:"
+            echo
+            sed 's/^/- /' <<<"$lines"
+            echo
+            echo "A release is tagged on a commit agentv-os's \`agentv\` branch has, as \`agentv-v1.0.0\`. If the tag is on the wrong commit, delete it and tag the right one. The other channel was still built."
+            echo
+            echo "The run: $RUN"
+          } >body.md
+          cat body.md >>"$GITHUB_STEP_SUMMARY"
+          if [[ -z $number ]]; then
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body-file body.md
+          elif ! gh issue view "$number" -R "$GITHUB_REPOSITORY" --json body,comments --jq '.body, .comments[].body' | grep -qxF -- "$(sed 's/^/- /' <<<"$lines" | head -n 1)"; then
+            # Said once for each thing left out, not again every hour.
+            gh issue comment "$number" -R "$GITHUB_REPOSITORY" --body-file body.md
+          fi
+          echo "::error::The plan left something out. It's in the issue \"$title\"."
+          exit 1
 
   build:
     name: "${{ matrix.channel }}: build"
@@ -218,6 +281,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       AGENTV_CHANNEL: ${{ matrix.channel }}
       AGENTV_REPO_URL: https://github.com/${{ github.repository }}/releases/download
+      # Only a run by hand can say going back to an older version is meant.
+      AGENTV_PUBLISH_BACK: ${{ github.event_name == 'workflow_dispatch' && inputs.back && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

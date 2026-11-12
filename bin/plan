@@ -3,8 +3,16 @@
 # Decides which channels need a new build, as JSON for the build workflow's
 # matrix: [{"channel": "edge", "ref": "commit=<sha>"}, ...].
 #
-#   stable: agentv-os's newest release tag (v0.x), once it's not published yet
+#   stable: agentv-os's newest release tag, once it's not published yet
 #   edge:   the newest commit of agentv whose Check run passed, likewise
+#
+# A release tag is agentv-v1.0.0 from 1.0 on, and v0.2.0 for the 0.x
+# releases before it. agentv-os also carries Omarchy's own tags, v1.1.0 to
+# v4.5.0, so a plain v tag is AgenTV's only when it's v0.*. The newest
+# release is the one with the highest version, whichever way its tag is
+# written. A release candidate's tag, agentv-v1.0.0-rc1, is never stable's:
+# a candidate's ISO carries edge's packages, and stable waits for the
+# release itself.
 #
 # A run by hand can name both instead: bin/plan <channel> <ref>. With --all it
 # lists both channels' current refs even when they're published, which is what
@@ -20,6 +28,9 @@
 # build fetches what was checked here even if the tag has moved since.
 # On the hourly run, a ref that doesn't pass is left out, with an error in
 # the run, and the other channel still builds. By hand, it stops the run.
+# What was left out is also written to the file AGENTV_PLAN_REFUSED names,
+# a line each, so the workflow can open an issue about it: an error in an
+# hourly run's log is one nobody reads.
 
 set -euo pipefail
 
@@ -34,14 +45,38 @@ fi
 
 os="repos/$owner/agentv-os"
 
-# Prints the commit a ref (tag=v0.1.0 or commit=<sha>) is on, when agentv
-# has that commit. Otherwise says why not, and fails.
+# AgenTV's release tags: agentv-v1.0.0, and v0.2.0 for a 0.x release. A
+# candidate's is agentv-v1.0.0-rc1. Never v1.1.0 to v4.5.0, which are
+# Omarchy's.
+# A number in a version has no leading zero: agentv-v01.0.0 would be the
+# same version as agentv-v1.0.0 to pacman, and two tags can't be one
+# release.
+N='(0|[1-9][0-9]*)'
+RELEASE="(v0\\.$N\\.$N|agentv-v$N\\.$N\\.$N)"
+CANDIDATE="agentv-v$N\\.$N\\.$N-rc[1-9][0-9]*"
+
+# The version a release tag stands for: agentv-v1.0.0 and v0.2.0 are 1.0.0
+# and 0.2.0.
+version_of() {
+  local tag=${1#agentv-}
+  echo "${tag#v}"
+}
+
+# Says why a ref was refused, as an error in the run and, on the hourly
+# run, in the list the workflow reads.
+refuse() {
+  echo "::error::$*" >&2
+  [[ -z ${AGENTV_PLAN_REFUSED:-} ]] || echo "$*" >>"$AGENTV_PLAN_REFUSED"
+}
+
+# Prints the commit a ref (tag=agentv-v1.0.0 or commit=<sha>) is on, when
+# agentv has that commit. Otherwise says why not, and fails.
 merged() {
   local ref=$1 sha kind status
   case $ref in
     tag=*)
-      if [[ ! ${ref#tag=} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "::error::$ref isn't a release tag, like tag=v0.1.0." >&2
+      if [[ ! ${ref#tag=} =~ ^($RELEASE|$CANDIDATE)$ ]]; then
+        refuse "$ref isn't one of AgenTV's release tags, like tag=agentv-v1.0.0, tag=agentv-v1.0.0-rc1 or tag=v0.2.0. A v1 to v4 tag in agentv-os is Omarchy's."
         return 1
       fi
       # The tag by its exact name, then through a tag that has a message of
@@ -51,25 +86,25 @@ merged() {
         read -r kind sha < <(gh api "$os/git/tags/$sha" --jq '"\(.object.type) \(.object.sha)"' 2>/dev/null) || true
       fi
       if [[ ${kind:-} != "commit" || ! ${sha:-} =~ ^[0-9a-f]{40}$ ]]; then
-        echo "::error::Couldn't find the commit agentv-os's ${ref#tag=} tag is on." >&2
+        refuse "Couldn't find the commit agentv-os's ${ref#tag=} tag is on."
         return 1
       fi
       ;;
     commit=*)
       sha=${ref#commit=}
       if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
-        echo "::error::$ref isn't a whole commit, like commit=<40 letters and digits>." >&2
+        refuse "$ref isn't a whole commit, like commit=<40 letters and digits>."
         return 1
       fi
       ;;
     *)
-      echo "::error::A ref is tag=v0.1.0 or commit=<sha>, not $ref." >&2
+      refuse "A ref is tag=agentv-v1.0.0 or commit=<sha>, not $ref."
       return 1
       ;;
   esac
   status=$(gh api "$os/compare/$sha...agentv" --jq .status 2>/dev/null) || status=""
   if [[ ! $status =~ ^(ahead|identical)$ ]]; then
-    echo "::error::agentv-os's agentv branch doesn't have $ref ($sha), so it isn't built, signed or published. Only what's merged is." >&2
+    refuse "agentv-os's agentv branch doesn't have $ref ($sha), so it isn't built, signed or published. Only what's merged is."
     return 1
   fi
   echo "$sha"
@@ -80,7 +115,12 @@ if [[ -n ${1:-} ]]; then
     echo "::error::The channel is edge or stable, not $1." >&2
     exit 1
   fi
-  commit=$(merged "${2:?a channel needs a ref, like tag=v0.1.0 or commit=<sha>}")
+  ref=${2:?a channel needs a ref, like tag=agentv-v1.0.0 or commit=<sha>}
+  if [[ $1 == "stable" && ${ref#tag=} =~ ^$CANDIDATE$ ]]; then
+    echo "::error::$ref is a release candidate's tag, and stable is never built from one. A candidate's ISO carries edge's packages. Stable waits for tag=${ref%-rc*}." >&2
+    exit 1
+  fi
+  commit=$(merged "$ref")
   jq -cn --arg channel "$1" --arg ref "commit=$commit" '[{channel: $channel, ref: $ref}]'
   exit 0
 fi
@@ -91,17 +131,54 @@ published() {
 
 plan=()
 
-tag=$(gh api "repos/$owner/agentv-os/tags?per_page=100" --jq '.[].name' |
-  grep -E '^v0\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
-if [[ -n $tag ]] && { (( all )) || ! published stable | grep -qE "^agentv-${tag#v}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
+# agentv-os's release tags, a line each: "<version> <tag>". Asked for by
+# the two ways a release tag starts, so Omarchy's v1 to v4 tags aren't even
+# listed, and then each name is checked whole. A candidate's tag isn't a
+# release.
+releases() {
+  local start tag refs="" some
+  for start in v0. agentv-v; do
+    some=$(gh api --paginate "$os/git/matching-refs/tags/$start" --jq '.[].ref') || return 1
+    refs+="$some"$'\n'
+  done
+  while IFS= read -r tag; do
+    tag=${tag#refs/tags/}
+    if [[ $tag =~ ^$RELEASE$ ]]; then
+      echo "$(version_of "$tag") $tag"
+    fi
+  done <<<"$refs"
+}
+
+# The newest release is the highest version. v0.2.0 and agentv-v1.0.0 side
+# by side: 1.0.0 is newer. The same version tagged both ways is one
+# release, and the agentv-v tag stands for it.
+tag=""
+if listed=$(releases); then
+  tag=$(sort -k1,1V -k2,2r <<<"$listed" | tail -n 1 | cut -d' ' -f2)
+else
+  refuse "Couldn't list agentv-os's release tags, so stable wasn't looked at this time."
+fi
+if [[ -n $tag ]] && { (( all )) || ! published stable | grep -qE "^agentv-$(version_of "$tag" | sed 's/\./\\./g')-[0-9]+-any\.pkg\.tar\.zst$"; }; then
   if commit=$(merged "tag=$tag"); then
     plan+=("$(jq -cn --arg ref "commit=$commit" '{channel: "stable", ref: $ref}')")
   fi
 fi
 
+# Edge's package says which commit it's from, 1.0.0.r3.g<sha>, with as much
+# of the sha as git needs to tell commits apart: seven letters and digits
+# or more.
 sha=$(gh api "repos/$owner/agentv-os/actions/workflows/check.yml/runs?branch=agentv&event=push&status=success&per_page=1" \
   --jq '.workflow_runs[0].head_sha // empty')
-if [[ -n $sha ]] && { (( all )) || ! published edge | grep -qE "\.g${sha:0:7}-[0-9]+-any\.pkg\.tar\.zst$"; }; then
+edge_has() {
+  local file short
+  while IFS= read -r file; do
+    [[ $file =~ \.g([0-9a-f]{7,40})-[0-9]+-any\.pkg\.tar\.zst$ ]] || continue
+    short=${BASH_REMATCH[1]}
+    [[ ${1:0:${#short}} == "$short" ]] && return 0
+  done
+  return 1
+}
+if [[ -n $sha ]] && { (( all )) || ! published edge | edge_has "$sha"; }; then
   if commit=$(merged "commit=$sha"); then
     plan+=("$(jq -cn --arg ref "commit=$commit" '{channel: "edge", ref: $ref}')")
   fi
