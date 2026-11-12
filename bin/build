@@ -101,9 +101,28 @@ for pkg in agentv-keyring agentv; do
   done
 done
 
+# A package that isn't built any more stays when this channel's agentv
+# still depends on it, as it was published, with its signature. Stable's
+# agentv 0.2.0 depends on agentv-voice, which was last built for it. One of
+# AgenTV's packages the channel doesn't have at all stops the build here
+# (bin/channel-deps).
+agentv_file=$(printf '%s\n' "${current[@]}" | grep -E '^agentv-[0-9]' | head -n 1)
+kept=$("$ROOT/bin/channel-deps" "$repo" "$repo/$agentv_file")
+while IFS= read -r name; do
+  [[ -n $name ]] || continue
+  printf '%s\n' "${current[@]}" | grep -qxF "$name" && continue
+  if [[ ! -f $repo/$name.sig ]]; then
+    echo "::error::agentv depends on ${name%%-[0-9]*}, and $name has no signature beside it, so it can't be kept." >&2
+    exit 1
+  fi
+  echo "Keeping $name, which agentv depends on and this build doesn't make"
+  current+=("$name")
+done <<<"$kept"
+
 cd "$repo"
 
-# Only this build's packages are in the repository.
+# Only this build's packages, and what agentv needs from before, are in the
+# repository.
 for file in *.pkg.tar.*; do
   [[ -f $file ]] || continue
   name=${file%.sig}

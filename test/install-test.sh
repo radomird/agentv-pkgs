@@ -289,19 +289,22 @@ if [[ -f /usr/bin/agentv-share-store ]]; then
   pass "a NAS share's hand-over to root is enabled, its drop folder is root's to read, and cifs-utils is named"
 fi
 
-# The TV has no voice of its own: the repository has no agentv-voice, and
-# agentv doesn't ask for one. It still names pipewire, for pw-play, which
-# plays an AI's own voice where a key has one.
-if pacman -Si agentv-voice >/dev/null 2>&1; then
-  fail "the repository has no agentv-voice"
-fi
+# The TV has no voice of its own from after 0.2.0: agentv doesn't ask for
+# agentv-voice. It still names pipewire, for pw-play, which plays an AI's
+# own voice where a key has one. Stable's 0.2.0 does depend on agentv-voice,
+# and then the channel has to have it, or a box can't install agentv.
 depends=$(sed -n '/^%DEPENDS%$/,/^$/p' "/var/lib/pacman/local/agentv-$version-1/desc")
-if grep -qx agentv-voice <<<"$depends"; then
-  fail "the package doesn't depend on agentv-voice"
-fi
 grep -qx pipewire <<<"$depends" || fail "the package depends on pipewire"
-[[ ! -e /usr/lib/agentv-voice ]] || fail "nothing of a voice is on the box"
-pass "there's no agentv-voice: agentv installs without it, and still names pipewire"
+if grep -qx agentv-voice <<<"$depends"; then
+  pacman -Q agentv-voice >/dev/null || fail "agentv $version depends on agentv-voice, and it was installed with it"
+  pass "agentv $version depends on agentv-voice, and the channel has it"
+else
+  if pacman -Si agentv-voice >/dev/null 2>&1; then
+    fail "the repository has no agentv-voice"
+  fi
+  [[ ! -e /usr/lib/agentv-voice ]] || fail "nothing of a voice is on the box"
+  pass "there's no agentv-voice: agentv installs without it, and still names pipewire"
+fi
 
 # Every module AgenTV's TypeScript imports is in the package: the daemon and
 # the home screen import each other's files, and a missing one only shows

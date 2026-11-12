@@ -47,6 +47,10 @@ on:
         description: "agentv-os ref that agentv has, like tag=agentv-v1.0.0 or commit=<whole sha> (empty: what the channels would build next)"
         type: string
         default: ""
+      back:
+        description: "Let this build replace a newer version on its channel (going back on purpose)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -277,6 +281,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       AGENTV_CHANNEL: ${{ matrix.channel }}
       AGENTV_REPO_URL: https://github.com/${{ github.repository }}/releases/download
+      # Only a run by hand can say going back to an older version is meant.
+      AGENTV_PUBLISH_BACK: ${{ github.event_name == 'workflow_dispatch' && inputs.back && '1' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
