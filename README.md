@@ -1,17 +1,17 @@
 # agentv-pkgs
 
-The packages your AgenTV box installs and updates from. AgenTV is the world's first open-source agentic TV OS. Powered by [Omarchy](https://omarchy.org).
+The packages your [AgenTV](https://github.com/radomird/agentv-os) box installs and updates from. AgenTV is the world's first open-source agentic TV OS. Powered by [Omarchy](https://omarchy.org).
 
-There's nothing to download here by hand. The ISO puts the packages on a new box, and after that your box keeps itself up to date from here.
+There's nothing to download here by hand. The USB stick puts the packages on a new box, and after that your box keeps itself up to date from here.
 
 ## What's in it
 
 Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. AgenTV adds two packages next to it:
 
-- **`agentv`** is everything AgenTV adds: the `agentv` command, its migrations, and its hooks into Omarchy's updates. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
+- **`agentv`** is everything AgenTV adds on top of Omarchy: the TV's home, setup, the phone remote and the `agentv` command. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
 - **`agentv-keyring`** holds the public key the packages are signed with.
 
-That way one `agentv update` (it runs `omarchy update` underneath) updates Arch, Omarchy and AgenTV together, with one snapshot first.
+That way one update brings Arch, Omarchy and AgenTV along together, and your box takes a snapshot first so you can go back. On the TV it's _Settings > This TV > Updates_. In a terminal it's `agentv update`, which runs `omarchy update` underneath.
 
 ## Stable and edge
 
@@ -19,6 +19,12 @@ CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), 
 
 - **stable** has AgenTV's releases. Every box starts on it.
 - **edge** has every agentv-os commit that passes its checks. It's for development.
+
+To try edge, run `agentv channel edge` and then `agentv update`. `agentv channel stable` takes you back, and your box picks up releases again from the next one.
+
+## Something went wrong?
+
+If an update didn't go right, [tell me what happened](https://github.com/radomird/agentv-pkgs/issues/new/choose). For a security problem, such as a package that isn't what it says it is, please [tell me privately](https://github.com/radomird/agentv-pkgs/security/advisories/new) first.
 
 ## For developers
 
@@ -30,4 +36,4 @@ CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), 
 
 ## License
 
-MIT, like Omarchy. AgenTV isn't made or endorsed by the Omarchy project.
+MIT, like Omarchy. The `agentv` package also carries AgenTV's menu sounds and setup music, which are all rights reserved, and fonts under the SIL Open Font License. Each keeps its licence file in the package. AgenTV isn't made or endorsed by the Omarchy project.
