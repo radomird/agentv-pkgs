@@ -111,7 +111,7 @@ package() {
     test/agentv/evals/package.json test/agentv/evals/router/*.ts test/agentv/evals/router/*.mts test/agentv/evals/router/*.json \
     launcher/*.html launcher/*.css launcher/*.ts launcher/package.json launcher/pages/*.ts launcher/sounds/*.ogg \
     launcher/looks/*.ts launcher/looks/*/* launcher/fonts/*.woff2 \
-    companion-web/*.html companion-web/*.css companion-web/*.ts \
+    companion-web/*.html companion-web/*.css companion-web/*.ts companion-web/manifest.json companion-web/*.png \
     config/omarchy/themed/*.tpl \
     setup/welcome/* setup/*.html setup/*.css setup/*.ts setup/audio/* \
     branding/logo.svg branding/logo.txt branding/plymouth-logo.png; do
