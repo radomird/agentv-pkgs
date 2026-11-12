@@ -62,6 +62,11 @@ jobs:
       - name: The package's version follows AgenTV's release tags
         run: test/pkgver-test.sh
 
+      # A channel keeps every one of AgenTV's packages its agentv depends
+      # on, and only ever moves forward.
+      - name: A channel keeps what its agentv needs
+        run: test/channel-deps-test.sh
+
       # makepkg reads the PKGBUILDs as bash; check that they parse and that
       # the keyring's checksums match its files.
       - name: The PKGBUILDs parse

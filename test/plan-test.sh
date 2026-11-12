@@ -164,6 +164,9 @@ check "one of Omarchy's own tags isn't a release of AgenTV's, though agentv has 
 check "nor is v1.0.0: from 1.0 on the tag says agentv" \
   stops "isn't one of AgenTV's release tags" stable tag=v1.0.0
 check "nor an old-style candidate" stops "isn't one of AgenTV's release tags" edge tag=v0.10.0-rc1
+for zero in agentv-v01.0.0 agentv-v1.00.0 v0.02.0 agentv-v1.0.0-rc01 agentv-v1.0.0-rc0; do
+  check "a number with a leading zero isn't a release: $zero" stops "isn't one of AgenTV's release tags" edge "tag=$zero"
+done
 
 check "a commit agentv doesn't have stops the run" \
   stops "agentv branch doesn't have commit=$unmerged" edge "commit=$unmerged"
@@ -252,7 +255,7 @@ check "with candidates before and after it, the release is stable's" plans "$(bo
 
 github
 tags v0. v0.2.0 v0.9.0junk v0.2 v0.3.0-rc1
-tags agentv-v agentv-v2 agentv-v9.9.9-beta agentv-v9.9.9.1 agentv-vnext
+tags agentv-v agentv-v2 agentv-v9.9.9-beta agentv-v9.9.9.1 agentv-vnext agentv-v09.0.0 agentv-v9.09.0
 check "a tag that only looks like a release isn't one" plans "$(both "$on_agentv")"
 
 github

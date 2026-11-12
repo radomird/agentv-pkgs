@@ -92,6 +92,9 @@ is "an old-style tag put on later doesn't take over from 1.0.0" edge "1.0.0.r2.g
 tag v1.0.1
 tag agentv-1.0.1
 tag agentv-v1.0.1-beta
+tag agentv-v01.0.1
+tag agentv-v1.00.1
+tag v0.02.9
 is "a tag that only looks like a release isn't one" stable "1.0.0.r2.g$(short)"
 commit "1.0.10"
 tag agentv-v1.0.9 HEAD~1

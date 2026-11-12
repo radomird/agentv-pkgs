@@ -48,8 +48,12 @@ os="repos/$owner/agentv-os"
 # AgenTV's release tags: agentv-v1.0.0, and v0.2.0 for a 0.x release. A
 # candidate's is agentv-v1.0.0-rc1. Never v1.1.0 to v4.5.0, which are
 # Omarchy's.
-RELEASE='(v0\.[0-9]+\.[0-9]+|agentv-v[0-9]+\.[0-9]+\.[0-9]+)'
-CANDIDATE='agentv-v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+'
+# A number in a version has no leading zero: agentv-v01.0.0 would be the
+# same version as agentv-v1.0.0 to pacman, and two tags can't be one
+# release.
+N='(0|[1-9][0-9]*)'
+RELEASE="(v0\\.$N\\.$N|agentv-v$N\\.$N\\.$N)"
+CANDIDATE="agentv-v$N\\.$N\\.$N-rc[1-9][0-9]*"
 
 # The version a release tag stands for: agentv-v1.0.0 and v0.2.0 are 1.0.0
 # and 0.2.0.
