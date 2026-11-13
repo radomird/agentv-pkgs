@@ -11,7 +11,7 @@ Your box keeps Omarchy's own `omarchy` package exactly as Omarchy ships it. Agen
 - **`agentv`** is everything AgenTV adds on top of Omarchy: the TV's home, setup, the phone remote and the `agentv` command. None of it goes into `/usr/share/omarchy/`, which is Omarchy's.
 - **`agentv-keyring`** holds the public key the packages are signed with.
 
-That way one update brings Arch, Omarchy and AgenTV along together, and your box takes a snapshot first so you can go back. On the TV it's _Settings > This TV > Updates_. In a terminal it's `agentv update`, which runs `omarchy update` underneath.
+That way one update brings Arch, Omarchy and AgenTV along together, and your box takes a snapshot first so you can go back. On the TV it's _Settings > System > Updates_. In a terminal it's `agentv update`, which runs `omarchy update` underneath.
 
 ## Stable and edge
 
