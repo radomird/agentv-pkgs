@@ -17,8 +17,10 @@ That way one update brings Arch, Omarchy and AgenTV along together, and your box
 
 CI builds the packages from [agentv-os](https://github.com/radomird/agentv-os), signs them, and publishes a pacman repository here as a release, one for each channel:
 
-- **stable** has AgenTV's releases. Every box starts on it.
-- **edge** has every agentv-os commit that passes its checks. It's for development.
+- **stable** has AgenTV's releases. A box installed from a release's ISO starts on it.
+- **edge** has every agentv-os commit that passes its checks. It's for trying what's next. A box installed from a release candidate's ISO, or from edge's, starts on it.
+
+A release candidate has no packages of its own. Its ISO carries edge's, from the commit it was cut on.
 
 To try edge, run `agentv channel edge` and then `agentv update`. `agentv channel stable` takes you back, and your box picks up releases again from the next one.
 
