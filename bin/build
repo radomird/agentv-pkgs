@@ -143,18 +143,32 @@ as_builder repo-add --quiet agentv.db.tar.gz "${current[@]}"
 # release.json, for Settings → Updates (ADR-025): the version, the date, a
 # security flag and What's new, signed like the packages (bin/sign). What's
 # new comes from agentv-os's release-notes/<version>.txt, up to five lines,
-# for a release; a first line of "security" marks a security release. Edge
-# builds have no notes.
+# for a release; a first line of "security" marks a security release. An
+# edge build, which a candidate's ISO carries too, has a version like
+# 0.2.0.r668.gabc1234 and no notes of its own, so it shows the notes of the
+# release it leads to: the first release-notes/<version>.txt after its base
+# version. It never takes that release's security mark.
 version=$(printf '%s\n' "${current[@]}" | sed -nE 's/^agentv-([0-9][^-]*)-[0-9]+-any\.pkg\.tar\.zst$/\1/p' | head -n 1)
 source_dir="$work/agentv/src/agentv-os"
 notes_file="$source_dir/release-notes/$version.txt"
+borrowed=false
+if [[ ! -f $notes_file && $version == *.r* ]]; then
+  base=${version%%.r*}
+  next=$(find "$source_dir/release-notes" -maxdepth 1 -name '*.txt' -printf '%f\n' 2>/dev/null | sed 's/\.txt$//' | { cat; echo "$base"; } | sort -uV | awk -v base="$base" 'found { print; exit } $0 == base { found = 1 }')
+  if [[ -n $next ]]; then
+    notes_file="$source_dir/release-notes/$next.txt"
+    borrowed=true
+  fi
+fi
 date=$(git -C "$source_dir" log -1 --format=%cI 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)
 security=false
 notes=()
 if [[ -f $notes_file ]]; then
   mapfile -t notes < <(grep -v '^[[:space:]]*$' "$notes_file")
   if [[ ${notes[0]:-} == "security" ]]; then
-    security=true
+    if [[ $borrowed == "false" ]]; then
+      security=true
+    fi
     notes=("${notes[@]:1}")
   fi
 fi
